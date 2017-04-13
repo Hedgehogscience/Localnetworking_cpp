@@ -35,6 +35,7 @@ namespace Winsock
 
     // Helpers.
     std::unordered_map<size_t /* Socket */, bool /* Blocking */> Shouldblock;
+    std::unordered_map<size_t /*Socket */, std::string /* Hostinfo */> Hostinfo;
     const char *Plainaddress(const struct sockaddr *Sockaddr)
     {
         auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
@@ -134,6 +135,35 @@ namespace Winsock
 
         return std::min(Result, uint32_t(INT32_MAX));
     }
+    int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
+    {
+        uint32_t Result = 0;
+        IServer *Server = Findserver(Socket);
+        if (!Server) CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
+
+        // While on a blocking server, poll the server every 10ms.
+        if (Server)
+        {
+            if (Server->Capabilities() & ISERVER_EXTENDED)
+            {
+                IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
+
+                while (false == ServerEx->onReadrequestEx(Socket, Buffer, &Result) && Shouldblock[Socket])
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            else
+            {
+                while (false == Server->onReadrequest(Buffer, &Result) && Shouldblock[Socket])
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+
+            // Return the host information.
+            std::memcpy(From, Hostinfo[Socket].data(), Hostinfo[Socket].size());
+            *Fromlength = int(Hostinfo[Socket].size());
+        }
+
+        return std::min(Result, uint32_t(INT32_MAX));
+    }
 
     // TODO(Convery): Implement all WS functions.
 }
@@ -158,6 +188,7 @@ namespace
             INSTALL_HOOK("connect", Winsock::Connect);
             INSTALL_HOOK("ioctlsocket", Winsock::IOControlsocket);
             INSTALL_HOOK("recv", Winsock::Receive);
+            INSTALL_HOOK("recvfrom", Winsock::Receivefrom);
 
             // TODO(Convery): Hook all WS functions.
         }
