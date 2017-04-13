@@ -47,6 +47,7 @@
 
 // The authors on windows should be able to check basic ranges.
 #ifdef _WIN32
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #define _SCL_SECURE_NO_WARNINGS
 #define WIN32_LEAN_AND_MEAN

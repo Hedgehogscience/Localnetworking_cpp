@@ -281,6 +281,43 @@ namespace Winsock
 
         return Length;
     }
+    hostent *__stdcall Gethostbyname(const char *Hostname)
+    {
+        IServer *Server = Createserver(Hostname);
+        if (!Server)
+        {
+            static hostent *Resolvedhost;
+            CALLWS(gethostbyname, &Resolvedhost, Hostname);
+
+            if (Resolvedhost)
+            {
+                DebugPrint(va("%s: \"%s\" -> %s", __func__, Hostname, inet_ntoa(*(in_addr*)Resolvedhost->h_addr_list[0])).c_str());
+            }
+
+            return Resolvedhost;
+        }
+
+        // Create a fake IP from the hostname.
+        uint32_t IPv4 = Hash::FNV1a_32(Hostname);
+        uint8_t *IP = (uint8_t *)&IPv4;
+
+        // Create the address struct.
+        in_addr *Localaddress = new in_addr();
+        in_addr *LocalsocketAddresslist[2];
+        Localaddress->S_un.S_addr = inet_addr(va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]).c_str());
+        LocalsocketAddresslist[0] = Localaddress;
+        LocalsocketAddresslist[1] = nullptr;
+
+        hostent *Localhost = new hostent();
+        Localhost->h_aliases = NULL;
+        Localhost->h_addrtype = AF_INET;
+        Localhost->h_length = sizeof(in_addr);
+        Localhost->h_name = const_cast<char *>(Hostname);        
+        Localhost->h_addr_list = (char **)LocalsocketAddresslist;
+
+        DebugPrint(va("%s: \"%s\" -> %s", __func__, Hostname, inet_ntoa(*(in_addr*)Localhost->h_addr_list[0])).c_str());
+        return Localhost;
+    }
 
     // TODO(Convery): Implement all WS functions.
 }
@@ -309,6 +346,7 @@ namespace
             INSTALL_HOOK("select", Winsock::Select);
             INSTALL_HOOK("send", Winsock::Send);
             INSTALL_HOOK("sendto", Winsock::Sendto);
+            INSTALL_HOOK("gethostbyname", Winsock::Gethostbyname);
 
             // TODO(Convery): Hook all WS functions.
         }
