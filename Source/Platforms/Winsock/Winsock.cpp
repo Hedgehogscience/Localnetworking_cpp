@@ -13,6 +13,9 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
+#undef min
+#undef max
+
 namespace Winsock
 {
     // The hooks installed in ws2_32.dll
@@ -106,6 +109,31 @@ namespace Winsock
         CALLWS(ioctlsocket, &Result, Socket, Command, pArgument);
         return Result;
     }
+    int __stdcall Receive(size_t Socket, char *Buffer, int Length, int Flags)
+    {
+        uint32_t Result = 0;
+        IServer *Server = Findserver(Socket);
+        if (!Server) CALLWS(recv, &Result, Socket, Buffer, Length, Flags);
+
+        // While on a blocking server, poll the server every 10ms.
+        if (Server)
+        {
+            if (Server->Capabilities() & ISERVER_EXTENDED)
+            {
+                IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
+
+                while (false == ServerEx->onReadrequestEx(Socket, Buffer, &Result) && Shouldblock[Socket])
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            else
+            {
+                while (false == Server->onReadrequest(Buffer, &Result) && Shouldblock[Socket])
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        }
+
+        return std::min(Result, uint32_t(INT32_MAX));
+    }
 
     // TODO(Convery): Implement all WS functions.
 }
@@ -129,6 +157,7 @@ namespace
             INSTALL_HOOK("bind", Winsock::Bind);
             INSTALL_HOOK("connect", Winsock::Connect);
             INSTALL_HOOK("ioctlsocket", Winsock::IOControlsocket);
+            INSTALL_HOOK("recv", Winsock::Receive);
 
             // TODO(Convery): Hook all WS functions.
         }
