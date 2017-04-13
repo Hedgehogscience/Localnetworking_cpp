@@ -145,6 +145,7 @@
     <ClInclude Include="Source\Configuration\Defines.h" />
     <ClInclude Include="Source\Configuration\Macros.h" />
     <ClInclude Include="Source\Configuration\Warnings.h" />
+    <ClInclude Include="Source\Servers\IDatagramserver.h" />
     <ClInclude Include="Source\Servers\IServer.h" />
     <ClInclude Include="Source\Servers\IStreamserver.h" />
     <ClInclude Include="Source\StdInclude.h" />
