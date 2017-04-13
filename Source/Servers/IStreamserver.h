@@ -92,8 +92,6 @@ struct IStreamserver : IServerEx
             // Copy the elements to the buffer and remove them from our stream.
             std::copy_n(Outgoingstream[Socket].begin(), Readcount, reinterpret_cast<uint8_t *>(Databuffer));
             Outgoingstream[Socket].erase(Outgoingstream[Socket].begin(), Outgoingstream[Socket].begin() + Readcount);
-
-            std::move(Outgoingstream[Socket].begin(), Outgoingstream[Socket].begin() + Readcount, reinterpret_cast<uint8_t *>(Databuffer));
         }
         Streamguard[Socket].unlock();
         
