@@ -48,9 +48,33 @@ namespace Winsock
     {
         int Result = 0;
         IServer *Server = Findserver(Socket);
-        if(!Server) Server = Findserver(Plaintext(Name));
-        if(!Server) CALLWS(bind, &Result, Socket, Name, Namelength);
+        if (!Server) Server = Findserver(Plaintext(Name));
+        if (!Server) CALLWS(bind, &Result, Socket, Name, Namelength);
 
+        return Result;
+    }
+    int __stdcall Connect(size_t Socket, const struct sockaddr *Name, int Namelength)
+    {
+        int Result = 0;
+        IServer *Server = Findserver(Socket);
+
+        // Disconnect any existing server instance.
+        if (Server && Server->Capabilities() & ISERVER_EXTENDED)
+            ((IServerEx *)Server)->onDisconnect(Socket);
+
+        // If there's no socket connected, try to create one by address.
+        if (!Server) Server = Createserver(Socket, Plaintext(Name));
+        if (!Server) CALLWS(connect, &Result, Socket, Name, Namelength);
+        if (Server && Server->Capabilities() & ISERVER_EXTENDED)
+        {
+            if (Name->sa_family == AF_INET6)
+                ((IServerEx *)Server)->onConnect(Socket, ntohs(((sockaddr_in6 *)Name)->sin6_port));
+            else
+                ((IServerEx *)Server)->onConnect(Socket, ntohs(((sockaddr_in *)Name)->sin_port));
+        }
+
+        // Debug information.
+        DebugPrint(va("Connected to %s", Plaintext(Name)).c_str());
         return Result;
     }
 
@@ -74,6 +98,7 @@ namespace
 
             // Winsock hooks.
             INSTALL_HOOK("bind", Winsock::Bind);
+            INSTALL_HOOK("connect", Winsock::Connect);
 
             // TODO(Convery): Hook all WS functions.
         }
