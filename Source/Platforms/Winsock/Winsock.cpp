@@ -35,7 +35,8 @@ namespace Winsock
 
     // Helpers.
     std::unordered_map<size_t /* Socket */, bool /* Blocking */> Shouldblock;
-    std::unordered_map<size_t /*Socket */, std::string /* Hostinfo */> Hostinfo;
+    std::unordered_map<size_t /* Socket */, std::string /* Hostinfo */> Hostinfo;
+    std::unordered_map<size_t /* Socket */, IServer * /* Serverinfo */> Serverinfo;
     const char *Plainaddress(const struct sockaddr *Sockaddr)
     {
         auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
@@ -72,6 +73,8 @@ namespace Winsock
         if (!Server) CALLWS(connect, &Result, Socket, Name, Namelength);
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
         {
+            Serverinfo[Socket] = Server;
+
             if (Name->sa_family == AF_INET6)
                 ((IServerEx *)Server)->onConnect(Socket, ntohs(((sockaddr_in6 *)Name)->sin6_port));
             else
@@ -164,6 +167,70 @@ namespace Winsock
 
         return std::min(Result, uint32_t(INT32_MAX));
     }
+    int __stdcall Select(int fdsCount, fd_set *Readfds, fd_set *Writefds, fd_set *Exceptfds, timeval *Timeout)
+    {
+        int Result = 0;
+        std::vector<size_t> Readsockets;
+        std::vector<size_t> Writesockets;
+
+        for (auto &Item : Serverinfo)
+        {
+            if (Readfds)
+            {
+                if (FD_ISSET(Item.first, Readfds))
+                {
+                    Readsockets.push_back(Item.first);
+                    FD_CLR(Item.first, Readfds);
+                }
+            }
+
+            if (Writefds)
+            {
+                if (FD_ISSET(Item.first, Writefds))
+                {
+                    Writesockets.push_back(Item.first);
+                    FD_CLR(Item.first, Writefds);
+                }
+            }
+
+            if (Exceptfds)
+            {
+                if (FD_ISSET(Item.first, Exceptfds))
+                {
+                    FD_CLR(Item.first, Exceptfds);
+                }
+            }
+        }
+
+        if ((!Readfds || Readfds->fd_count == 0) && (!Writefds || Writefds->fd_count == 0))
+        {
+            Timeout->tv_sec = 0;
+            Timeout->tv_usec = 0;
+        }
+
+        CALLWS(select, &Result, fdsCount, Readfds, Writefds, Exceptfds, Timeout);
+        if (Result < 0) Result = 0;
+
+        for (int i = 0; i < Readsockets.size(); i++)
+        {
+            if (Serverinfo[Readsockets[i]] && Readfds)
+            {
+                FD_SET(Readsockets.at(i), Readfds);
+                Result++;
+            }
+        }
+
+        for (int i = 0; i < Writesockets.size(); i++)
+        {
+            if (Writefds)
+            {
+                FD_SET(Writesockets.at(i), Writefds);
+                Result++;
+            }
+        }
+
+        return Result;
+    }
 
     // TODO(Convery): Implement all WS functions.
 }
@@ -189,6 +256,7 @@ namespace
             INSTALL_HOOK("ioctlsocket", Winsock::IOControlsocket);
             INSTALL_HOOK("recv", Winsock::Receive);
             INSTALL_HOOK("recvfrom", Winsock::Receivefrom);
+            INSTALL_HOOK("select", Winsock::Select);
 
             // TODO(Convery): Hook all WS functions.
         }
