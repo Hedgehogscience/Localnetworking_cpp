@@ -31,7 +31,7 @@ namespace Winsock
     Hook->Reinstall(); }
 
     // Helpers.
-    const char *Plaintext(const struct sockaddr *Sockaddr)
+    const char *Plainaddress(const struct sockaddr *Sockaddr)
     {
         auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
 
@@ -48,7 +48,7 @@ namespace Winsock
     {
         int Result = 0;
         IServer *Server = Findserver(Socket);
-        if (!Server) Server = Findserver(Plaintext(Name));
+        if (!Server) Server = Findserver(Plainaddress(Name));
         if (!Server) CALLWS(bind, &Result, Socket, Name, Namelength);
 
         return Result;
@@ -63,7 +63,7 @@ namespace Winsock
             ((IServerEx *)Server)->onDisconnect(Socket);
 
         // If there's no socket connected, try to create one by address.
-        if (!Server) Server = Createserver(Socket, Plaintext(Name));
+        if (!Server) Server = Createserver(Socket, Plainaddress(Name));
         if (!Server) CALLWS(connect, &Result, Socket, Name, Namelength);
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
         {
@@ -74,7 +74,7 @@ namespace Winsock
         }
 
         // Debug information.
-        DebugPrint(va("Connected to %s", Plaintext(Name)).c_str());
+        DebugPrint(va("Connected to %s", Plainaddress(Name)).c_str());
         return Result;
     }
 
