@@ -10,6 +10,7 @@
 #ifdef _WIN32
 #include <Windows.h>
 #include <WinSock2.h>
+#include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
 namespace Winsock
@@ -29,11 +30,32 @@ namespace Winsock
     Hook->Function(__VA_ARGS__);                                        \
     Hook->Reinstall(); }
 
+    // Helpers.
+    const char *Plaintext(const struct sockaddr *Sockaddr)
+    {
+        auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
+
+        if (Sockaddr->sa_family == AF_INET6)
+            inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)Sockaddr)->sin6_addr), Address.get(), INET6_ADDRSTRLEN);
+        else
+            inet_ntop(AF_INET, &(((struct sockaddr_in *)Sockaddr)->sin_addr), Address.get(), INET6_ADDRSTRLEN);
+
+        return Address.get();
+    }
+
+    // Winsock replacements.
+    int __stdcall Bind(size_t Socket, const struct sockaddr *Name, int Namelength)
+    {
+        int Result = 0;
+        IServer *Server = Findserver(Socket);
+        if(!Server) Server = Findserver(Plaintext(Name));
+        if(!Server) CALLWS(bind, &Result, Socket, Name, Namelength);
+
+        return Result;
+    }
+
     // TODO(Convery): Implement all WS functions.
 }
-
-
-
 
 // Initialize winsock hooks on startup.
 namespace
@@ -49,6 +71,9 @@ namespace
             Winsock::WSHooks[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                           \
             ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks[#_Replacement])->Installhook(Address, (void *)&_Replacement); \
             }}
+
+            // Winsock hooks.
+            INSTALL_HOOK("bind", Winsock::Bind);
 
             // TODO(Convery): Hook all WS functions.
         }
