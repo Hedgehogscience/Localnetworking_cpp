@@ -11,7 +11,7 @@
 namespace Hooking
 {
     #define EXTENDEDHOOKDECL(Basehook)                                  \
-    template <typename Signature, typename ...Arguments>                \
+    template <typename Signature>                                       \
     struct Basehook ##Ex : public Basehook                              \
     {                                                                   \
         std::function<Signature> Function;                              \
