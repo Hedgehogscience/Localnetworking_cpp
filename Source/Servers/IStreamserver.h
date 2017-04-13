@@ -83,6 +83,10 @@ struct IStreamserver : IServerEx
         if (false == Connectedstreams[Socket] && 0 == Outgoingstream[Socket].size())
             return false;
 
+        // While it should never be null, just to be safe.
+        if (!Databuffer || !Datasize)
+            return false;
+
         Streamguard[Socket].lock();
         {
             // The data that will fit into the buffer.

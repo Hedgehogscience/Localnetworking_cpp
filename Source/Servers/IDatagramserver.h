@@ -51,6 +51,10 @@ struct IDatagramserver : IServer
         if (0 == Outgoingpackets.size())
             return false;
 
+        // While it should never be null, just to be safe.
+        if (!Databuffer || !Datasize)
+            return false;
+
         Packetguard.lock();
         {
             // Get the first packet.
