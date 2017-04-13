@@ -231,6 +231,29 @@ namespace Winsock
 
         return Result;
     }
+    int __stdcall Send(size_t Socket, const char *Buffer, int Length, int Flags)
+    {
+        IServer *Server = Findserver(Socket);
+        if (!Server) CALLWS(send, &Length, Socket, Buffer, Length, Flags);
+
+        if (Server)
+        {
+            if (Server->Capabilities() & ISERVER_EXTENDED)
+            {
+                IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
+
+                if(false == ServerEx->onWriterequestEx(Socket, Buffer, Length))
+                    return int(-1);
+            }
+            else
+            {
+                if(false == Server->onWriterequest(Buffer, Length))
+                    return int(-1);
+            }
+        }
+
+        return Length;
+    }
 
     // TODO(Convery): Implement all WS functions.
 }
@@ -257,6 +280,7 @@ namespace
             INSTALL_HOOK("recv", Winsock::Receive);
             INSTALL_HOOK("recvfrom", Winsock::Receivefrom);
             INSTALL_HOOK("select", Winsock::Select);
+            INSTALL_HOOK("send", Winsock::Send);
 
             // TODO(Convery): Hook all WS functions.
         }
