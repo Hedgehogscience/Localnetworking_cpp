@@ -163,6 +163,7 @@
     <ClCompile Include="Source\Utilities\Binary\Hooking.cpp" />
     <ClCompile Include="Source\Utilities\Binary\Memprotect.cpp" />
     <ClCompile Include="Source\Utilities\Data\Bytebuffer.cpp" />
+    <ClCompile Include="Source\Platforms\Winsock\Winsock.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Localnetworking_cpp.licenseheader" />
