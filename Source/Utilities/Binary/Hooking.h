@@ -18,7 +18,7 @@ namespace Hooking
         virtual bool Installhook(void *Location, void *Target) override \
         {                                                               \
             Function = *(Signature *)Location;                          \
-            Basehook::Installhook(Location, Target);                    \
+            return Basehook::Installhook(Location, Target);             \
         }                                                               \
     }                                                                   \
     
