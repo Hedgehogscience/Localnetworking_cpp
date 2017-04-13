@@ -31,6 +31,7 @@ namespace Winsock
     Hook->Reinstall(); }
 
     // Helpers.
+    std::unordered_map<size_t /* Socket */, bool /* Blocking */> Shouldblock;
     const char *Plainaddress(const struct sockaddr *Sockaddr)
     {
         auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
@@ -77,6 +78,34 @@ namespace Winsock
         DebugPrint(va("Connected to %s", Plainaddress(Name)).c_str());
         return Result;
     }
+    int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *pArgument)
+    {
+        int Result = 0;
+        const char *Readable = "UNKNOWN";
+
+        switch (Command)
+        {
+            case FIONBIO: 
+            {
+                Readable = "FIONBIO";
+                Shouldblock[Socket] = *pArgument == 0;
+                break;
+            }
+            case FIONREAD: Readable = "FIONREAD"; break;
+            case FIOASYNC: Readable = "FIOASYNC"; break;
+            case SIOCSHIWAT: Readable = "SIOCSHIWAT"; break;
+            case SIOCGHIWAT: Readable = "SIOCGHIWAT"; break;
+            case SIOCSLOWAT: Readable = "SIOCSLOWAT"; break;
+            case SIOCGLOWAT: Readable = "SIOCGLOWAT"; break;
+            case SIOCATMARK: Readable = "SIOCATMARK"; break;
+        }
+
+        // Debug information.
+        DebugPrint(va("Socket 0x%X modified %s", Socket, Readable).c_str());
+        
+        CALLWS(ioctlsocket, &Result, Socket, Command, pArgument);
+        return Result;
+    }
 
     // TODO(Convery): Implement all WS functions.
 }
@@ -99,6 +128,7 @@ namespace
             // Winsock hooks.
             INSTALL_HOOK("bind", Winsock::Bind);
             INSTALL_HOOK("connect", Winsock::Connect);
+            INSTALL_HOOK("ioctlsocket", Winsock::IOControlsocket);
 
             // TODO(Convery): Hook all WS functions.
         }
