@@ -11,6 +11,7 @@
 
 // Create a server based on the hostname, returns null if there's no handler.
 IServer *Createserver(const size_t Socket, const char *Hostname);
+IServer *Createserver(const char *Hostname);
 
 // Find a server by criteria.
 IServer *Findserver(const size_t Socket);

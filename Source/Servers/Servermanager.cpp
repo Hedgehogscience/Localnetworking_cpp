@@ -5,6 +5,7 @@
 */
 
 #include "Servers.h"
+#include "../StdInclude.h"
 #include <unordered_map>
 #include <functional>
 
@@ -21,6 +22,12 @@ std::unordered_map<std::string /* Address */, IServer * /* Server */> ServersbyA
 // Create a server based on the hostname, returns null if there's no handler.
 IServer *Createserver(const size_t Socket, const char *Hostname)
 {
+    auto Result = Createserver(Hostname);
+    if(Result) ServersbySocket[Socket] = Result;
+    return Result;
+}
+IServer *Createserver(const char *Hostname)
+{
     for (auto &Item : Networkmodules)
     {
         // Find the export in the module.
@@ -33,8 +40,11 @@ IServer *Createserver(const size_t Socket, const char *Hostname)
 
         if (Result)
         {
+            uint32_t IPv4 = Hash::FNV1a_32(Hostname);
+            uint8_t *IP = (uint8_t *)&IPv4;
+
             ServersbyAddress[Hostname] = Result;
-            ServersbySocket[Socket] = Result;
+            ServersbyAddress[va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3])] = Result;
             return Result;
         }
     }
