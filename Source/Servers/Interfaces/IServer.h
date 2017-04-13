@@ -8,11 +8,10 @@
 #include <cstdint>
 
 // The server capabilities flags, can be combined.
-#define ISERVER_BASE        0
-#define ISERVER_EXTENDED    1
-#define ISERVER_RESERVED1   2
-#define ISERVER_RESERVED2   4
-#define ISERVER_RESERVED3   8
+#define ISERVER_BASE        1
+#define ISERVER_EXTENDED    2
+#define ISERVER_RESERVED1   4
+#define ISERVER_RESERVED2   8
 
 // The base server for single-socket connections.
 struct IServer
