@@ -145,9 +145,10 @@
     <ClInclude Include="Source\Configuration\Defines.h" />
     <ClInclude Include="Source\Configuration\Macros.h" />
     <ClInclude Include="Source\Configuration\Warnings.h" />
-    <ClInclude Include="Source\Servers\IDatagramserver.h" />
-    <ClInclude Include="Source\Servers\IServer.h" />
-    <ClInclude Include="Source\Servers\IStreamserver.h" />
+    <ClInclude Include="Source\Servers\Interfaces\IDatagramserver.h" />
+    <ClInclude Include="Source\Servers\Interfaces\IServer.h" />
+    <ClInclude Include="Source\Servers\Interfaces\IStreamserver.h" />
+    <ClInclude Include="Source\Servers\Servers.h" />
     <ClInclude Include="Source\StdInclude.h" />
     <ClInclude Include="Source\Utilities\Binary\Hooking.h" />
     <ClInclude Include="Source\Utilities\Binary\Memprotect.h" />
