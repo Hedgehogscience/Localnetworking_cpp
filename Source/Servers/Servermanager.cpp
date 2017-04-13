@@ -22,8 +22,9 @@ std::unordered_map<std::string /* Address */, IServer * /* Server */> ServersbyA
 // Create a server based on the hostname, returns null if there's no handler.
 IServer *Createserver(const size_t Socket, const char *Hostname)
 {
-    auto Result = Createserver(Hostname);
-    if(Result) ServersbySocket[Socket] = Result;
+    auto Result = Findserver(Hostname);
+    if (!Result) Result = Createserver(Hostname);
+    if (Result) ServersbySocket[Socket] = Result;
     return Result;
 }
 IServer *Createserver(const char *Hostname)
