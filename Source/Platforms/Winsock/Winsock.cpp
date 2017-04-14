@@ -255,6 +255,7 @@ namespace Winsock
     {
         IServer *Server = Findserver(Socket);
         if (!Server) Server = Findserver(Plainaddress(To));
+        if (!Server) Server = Createserver(Socket, Plainaddress(To));
         if (!Server) CALLWS(sendto, &Length, Socket, Buffer, Length, Flags, To, Tolength);
 
         if (Server)
