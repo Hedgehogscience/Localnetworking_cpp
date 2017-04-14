@@ -21,5 +21,9 @@ IServer *Findserver(const char *Address);
 std::string Findaddress(const size_t Socket);
 std::string Findaddress(const IServer *Server);
 
+// Erase an entry from the list.
+void Disconnectserver(const size_t Socket);
+void Disconnectserver(const IServer *Server);
+
 // Return all active sockets.
 std::vector<size_t> Activesockets();

@@ -122,6 +122,27 @@ std::string Findaddress(const IServer *Server)
     return Result;
 }
 
+// Erase an entry from the list.
+void Disconnectserver(const size_t Socket)
+{
+    auto Result = Findserver(Socket);
+    if (Result)
+    {
+        Disconnectserver(Result);
+        ServersbySocket.erase(Socket);
+    }
+}
+void Disconnectserver(const IServer *Server)
+{
+    for (auto &Item : ServersbyAddress)
+    {
+        if (Item.second == Server)
+        {
+            ServersbyAddress.erase(Item.first);
+        }
+    }
+}
+
 // Return all active sockets.
 std::vector<size_t> Activesockets()
 {
