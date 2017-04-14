@@ -36,7 +36,7 @@ namespace Winsock
     // Helpers.
     std::unordered_map<size_t /* Socket */, bool /* Blocking */> Shouldblock;
     std::unordered_map<size_t /* Socket */, std::string /* Hostinfo */> Hostinfo;
-    const char *Plainaddress(const struct sockaddr *Sockaddr)
+    std::string Plainaddress(const struct sockaddr *Sockaddr)
     {
         auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
 
@@ -45,7 +45,7 @@ namespace Winsock
         else
             inet_ntop(AF_INET, &(((struct sockaddr_in *)Sockaddr)->sin_addr), Address.get(), INET6_ADDRSTRLEN);
 
-        return Address.get();
+        return std::string(Address.get());
     }
 
     // Winsock replacements.
@@ -79,7 +79,7 @@ namespace Winsock
         }
 
         // Debug information.
-        if(0 == Result) DebugPrint(va("Connected to %s", Plainaddress(Name)).c_str());
+        DebugPrint(va("%s to %s", 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str()).c_str());
         return Result;
     }
     int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *pArgument)

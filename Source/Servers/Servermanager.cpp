@@ -20,14 +20,14 @@ std::unordered_map<size_t /* Socket */, IServer * /* Server */> ServersbySocket;
 std::unordered_map<std::string /* Address */, IServer * /* Server */> ServersbyAddress;
 
 // Create a server based on the hostname, returns null if there's no handler.
-IServer *Createserver(const size_t Socket, const char *Hostname)
+IServer *Createserver(const size_t Socket, std::string Hostname)
 {
     auto Result = Findserver(Hostname);
     if (!Result) Result = Createserver(Hostname);
     if (Result) ServersbySocket[Socket] = Result;
     return Result;
 }
-IServer *Createserver(const char *Hostname)
+IServer *Createserver(std::string Hostname)
 {
     for (auto &Item : Networkmodules)
     {
@@ -37,7 +37,7 @@ IServer *Createserver(const char *Hostname)
 
         // Ask the module to create a new instance for the hostname.
         auto Function = (IServer * (*)(const char *))pFunction;
-        auto Result = Function(Hostname);
+        auto Result = Function(Hostname.c_str());
 
         if (Result)
         {
@@ -62,7 +62,7 @@ IServer *Findserver(const size_t Socket)
     else
         return nullptr;
 }
-IServer *Findserver(const char *Address)
+IServer *Findserver(std::string Address)
 {
     auto Result = ServersbyAddress.find(Address);
     if (Result != ServersbyAddress.end())

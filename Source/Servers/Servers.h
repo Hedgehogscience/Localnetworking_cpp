@@ -10,12 +10,12 @@
 #include "Interfaces/IDatagramserver.h"
 
 // Create a server based on the hostname, returns null if there's no handler.
-IServer *Createserver(const size_t Socket, const char *Hostname);
-IServer *Createserver(const char *Hostname);
+IServer *Createserver(const size_t Socket, std::string Hostname);
+IServer *Createserver(std::string Hostname);
 
 // Find a server by criteria.
 IServer *Findserver(const size_t Socket);
-IServer *Findserver(const char *Address);
+IServer *Findserver(std::string Address);
 
 // Find the address associated with a server.
 std::string Findaddress(const size_t Socket);
