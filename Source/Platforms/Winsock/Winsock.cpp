@@ -61,25 +61,29 @@ namespace Winsock
     int __stdcall Connect(size_t Socket, const struct sockaddr *Name, int Namelength)
     {
         int Result = 0;
+        short Port = 0;
         IServer *Server = Findserver(Socket);
 
         // Disconnect any existing server instance.
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
             ((IServerEx *)Server)->onDisconnect(Socket);
 
+        // Get the port the game wants to use.
+        if (Name->sa_family == AF_INET6)
+            Port = ntohs(((sockaddr_in6 *)Name)->sin6_port);
+        else
+            Port = ntohs(((sockaddr_in *)Name)->sin_port);
+
         // If there's no socket connected, try to create one by address.
         if (!Server) Server = Createserver(Socket, Plainaddress(Name));
         if (!Server) CALLWS(connect, &Result, Socket, Name, Namelength);
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
         {
-            if (Name->sa_family == AF_INET6)
-                ((IServerEx *)Server)->onConnect(Socket, ntohs(((sockaddr_in6 *)Name)->sin6_port));
-            else
-                ((IServerEx *)Server)->onConnect(Socket, ntohs(((sockaddr_in *)Name)->sin_port));
+            ((IServerEx *)Server)->onConnect(Socket, Port);
         }
 
         // Debug information.
-        DebugPrint(va("%s to %s", 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str()).c_str());
+        DebugPrint(va("%s to %s:%u", 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), Port).c_str());
         return Result;
     }
     int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *pArgument)
@@ -280,6 +284,8 @@ namespace Winsock
             }
         }
 
+        // Debug information.
+        DebugPrint(va("Sending %i bytes to external server %s:%u", Length, Plainaddress(To).c_str(), To->sa_family == AF_INET6 ? ntohs(((sockaddr_in6 *)To)->sin6_port) : ntohs(((sockaddr_in *)To)->sin_port)).c_str());
         return Length;
     }
 
