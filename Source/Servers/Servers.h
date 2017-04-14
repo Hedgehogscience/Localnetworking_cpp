@@ -17,5 +17,9 @@ IServer *Createserver(const char *Hostname);
 IServer *Findserver(const size_t Socket);
 IServer *Findserver(const char *Address);
 
+// Find the address associated with a server.
+std::string Findaddress(const size_t Socket);
+std::string Findaddress(const IServer *Server);
+
 // Return all active sockets.
 std::vector<size_t> Activesockets();

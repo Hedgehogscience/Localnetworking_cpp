@@ -71,6 +71,57 @@ IServer *Findserver(const char *Address)
         return nullptr;
 }
 
+// Find the address associated with a server.
+std::string Findaddress(const size_t Socket)
+{
+    auto Result = Findserver(Socket);
+    if (Result) return Findaddress(Result);
+    else return "";
+}
+std::string Findaddress(const IServer *Server)
+{
+    std::vector<std::string> Candidates;
+    std::string Result;
+
+    // Find all addresses.
+    for (auto &Item : ServersbyAddress)
+    {
+        if (Item.second == Server)
+        {
+            Candidates.push_back(Item.first);
+        }
+    }
+
+    // Find the one that's an IP.
+    for (auto &Item : Candidates)
+    {
+        size_t i = 0;
+
+        for (; i < Item.size(); ++i)
+        {
+            if (Item[i] != '.' && (Item[i] > '9' || Item[i] < '0'))
+                break;
+        }
+
+        if (i != Item.size())
+            continue;
+
+        Result = Item;
+        break;
+    }
+
+    // If there's no IP, create one.
+    if (0 == Result.size())
+    {
+        uint32_t IPv4 = Hash::FNV1a_32(Candidates[0]);
+        uint8_t *IP = (uint8_t *)&IPv4;
+
+        Result = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
+    }
+    
+    return Result;
+}
+
 // Return all active sockets.
 std::vector<size_t> Activesockets()
 {
