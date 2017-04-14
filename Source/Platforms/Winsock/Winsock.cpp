@@ -79,7 +79,7 @@ namespace Winsock
         }
 
         // Debug information.
-        DebugPrint(va("Connected to %s", Plainaddress(Name)).c_str());
+        if(0 == Result) DebugPrint(va("Connected to %s", Plainaddress(Name)).c_str());
         return Result;
     }
     int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *pArgument)
@@ -134,6 +134,7 @@ namespace Winsock
             }
         }
 
+        if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
@@ -163,6 +164,7 @@ namespace Winsock
             *Fromlength = int(Hostinfo[Socket].size());
         }
 
+        if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
     int __stdcall Select(int fdsCount, fd_set *Readfds, fd_set *Writefds, fd_set *Exceptfds, timeval *Timeout)
@@ -262,7 +264,7 @@ namespace Winsock
         if (Server)
         {
             // Create the hostinfo for recvfrom.
-            Hostinfo[Socket] = { (char *)To, Tolength };
+            Hostinfo[Socket] = { (char *)To, size_t(Tolength) };
 
             if (Server->Capabilities() & ISERVER_EXTENDED)
             {
