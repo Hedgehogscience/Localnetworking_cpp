@@ -36,7 +36,6 @@ namespace Winsock
     // Helpers.
     std::unordered_map<size_t /* Socket */, bool /* Blocking */> Shouldblock;
     std::unordered_map<size_t /* Socket */, std::string /* Hostinfo */> Hostinfo;
-    std::unordered_map<size_t /* Socket */, IServer * /* Serverinfo */> Serverinfo;
     const char *Plainaddress(const struct sockaddr *Sockaddr)
     {
         auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
@@ -73,8 +72,6 @@ namespace Winsock
         if (!Server) CALLWS(connect, &Result, Socket, Name, Namelength);
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
         {
-            Serverinfo[Socket] = Server;
-
             if (Name->sa_family == AF_INET6)
                 ((IServerEx *)Server)->onConnect(Socket, ntohs(((sockaddr_in6 *)Name)->sin6_port));
             else
@@ -173,31 +170,31 @@ namespace Winsock
         std::vector<size_t> Readsockets;
         std::vector<size_t> Writesockets;
 
-        for (auto &Item : Serverinfo)
+        for (auto &Item : Activesockets())
         {
             if (Readfds)
             {
-                if (FD_ISSET(Item.first, Readfds))
+                if (FD_ISSET(Item, Readfds))
                 {
-                    Readsockets.push_back(Item.first);
-                    FD_CLR(Item.first, Readfds);
+                    Readsockets.push_back(Item);
+                    FD_CLR(Item, Readfds);
                 }
             }
 
             if (Writefds)
             {
-                if (FD_ISSET(Item.first, Writefds))
+                if (FD_ISSET(Item, Writefds))
                 {
-                    Writesockets.push_back(Item.first);
-                    FD_CLR(Item.first, Writefds);
+                    Writesockets.push_back(Item);
+                    FD_CLR(Item, Writefds);
                 }
             }
 
             if (Exceptfds)
             {
-                if (FD_ISSET(Item.first, Exceptfds))
+                if (FD_ISSET(Item, Exceptfds))
                 {
-                    FD_CLR(Item.first, Exceptfds);
+                    FD_CLR(Item, Exceptfds);
                 }
             }
         }
@@ -213,7 +210,7 @@ namespace Winsock
 
         for (int i = 0; i < Readsockets.size(); i++)
         {
-            if (Serverinfo[Readsockets[i]] && Readfds)
+            if (Readfds)
             {
                 FD_SET(Readsockets.at(i), Readfds);
                 Result++;

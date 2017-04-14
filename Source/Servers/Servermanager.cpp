@@ -71,6 +71,15 @@ IServer *Findserver(const char *Address)
         return nullptr;
 }
 
+// Return all active sockets.
+std::vector<size_t> Activesockets()
+{
+    std::vector<size_t> Result;
+    for (auto &Item : ServersbySocket)
+        Result.push_back(Item.first);
+    return Result;
+}
+
 // Load all modules from /Localnetworking/ on startup.
 namespace 
 { 
