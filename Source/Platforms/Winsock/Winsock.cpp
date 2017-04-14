@@ -367,6 +367,26 @@ namespace Winsock
 
         return Result;
     }
+    int __stdcall Getsockname(size_t Socket, struct sockaddr *Name, int *Namelength)
+    {
+        int Result = 0;
+        IServer *Server = Findserver(Socket);
+        if(!Server) CALLWS(getsockname, &Result, Socket, Name, Namelength);
+
+        // For our servers we just return a fake IP.
+        if (Server)
+        {
+            sockaddr_in *Localname = reinterpret_cast<sockaddr_in *>(Name);
+            *Namelength = sizeof(sockaddr_in);
+            uint8_t *IP = (uint8_t *)&Socket;
+
+            Localname->sin_family = AF_INET;
+            Localname->sin_port = 0;
+            Localname->sin_addr.S_un.S_addr = inet_addr(va("%u.%u.%u.%u", 192, 168, IP[2], IP[3]).c_str());
+        }
+
+        return Result;
+    }
 
     // TODO(Convery): Implement all WS functions.
 }
@@ -398,6 +418,7 @@ namespace
             INSTALL_HOOK("gethostbyname", Winsock::Gethostbyname);
             INSTALL_HOOK("getaddrinfo", Winsock::Getaddrinfo);
             INSTALL_HOOK("getpeername", Winsock::Getpeername);
+            INSTALL_HOOK("getsockname", Winsock::Getsockname);
 
             // TODO(Convery): Hook all WS functions.
         }
