@@ -107,6 +107,7 @@ namespace Winsock
         // Debug information.
         DebugPrint(va("Socket 0x%X modified %s", Socket, Readable).c_str());
         
+        // Call the IOControl on the actual socket.
         CALLWS(ioctlsocket, &Result, Socket, Command, pArgument);
         return Result;
     }
@@ -347,6 +348,25 @@ namespace Winsock
         DebugPrint(va("%s: \"%s\" -> %s", __func__, Nodename, inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)).c_str());
         return WSResult;
     }
+    int __stdcall Getpeername(size_t Socket, struct sockaddr *Name, int *Namelength)
+    {
+        int Result = 0;
+        IServer *Server = Findserver(Socket);
+        if(!Server) CALLWS(getpeername, &Result, Socket, Name, Namelength);
+
+        // For our servers we just return the IP.
+        if (Server)
+        {
+            sockaddr_in *Localname = reinterpret_cast<sockaddr_in *>(Name);
+            *Namelength = sizeof(sockaddr_in);
+
+            Localname->sin_family = AF_INET;
+            Localname->sin_port = 0;
+            Localname->sin_addr.S_un.S_addr = inet_addr(Findaddress(Server).c_str());
+        }
+
+        return Result;
+    }
 
     // TODO(Convery): Implement all WS functions.
 }
@@ -377,6 +397,7 @@ namespace
             INSTALL_HOOK("sendto", Winsock::Sendto);
             INSTALL_HOOK("gethostbyname", Winsock::Gethostbyname);
             INSTALL_HOOK("getaddrinfo", Winsock::Getaddrinfo);
+            INSTALL_HOOK("getpeername", Winsock::Getpeername);
 
             // TODO(Convery): Hook all WS functions.
         }
