@@ -388,6 +388,33 @@ namespace Winsock
         return Result;
     }
 
+    int __stdcall Closesocket(size_t Socket)
+    {
+        IServer *Server = Findserver(Socket);
+        CALLWS_NORET(closesocket, Socket);
+        Disconnectserver(Socket);
+
+        if (Server && Server->Capabilities() & ISERVER_EXTENDED)
+        {
+            IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
+            ServerEx->onDisconnect(Socket);
+        }
+        return 0;
+    }
+    int __stdcall Shutdown(size_t Socket, int How)
+    {
+        IServer *Server = Findserver(Socket);
+        CALLWS_NORET(shutdown, Socket, How);
+        
+        if (SD_BOTH == How) Disconnectserver(Socket);
+        if (Server && Server->Capabilities() & ISERVER_EXTENDED)
+        {
+            IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
+            ServerEx->onDisconnect(Socket);
+        }
+        return 0;
+    }
+    
     // TODO(Convery): Implement all WS functions.
 }
 
@@ -419,7 +446,9 @@ namespace
             INSTALL_HOOK("getaddrinfo", Winsock::Getaddrinfo);
             INSTALL_HOOK("getpeername", Winsock::Getpeername);
             INSTALL_HOOK("getsockname", Winsock::Getsockname);
-
+            INSTALL_HOOK("closesocket", Winsock::Closesocket);
+            INSTALL_HOOK("shutdown", Winsock::Shutdown);
+            
             // TODO(Convery): Hook all WS functions.
         }
     };
