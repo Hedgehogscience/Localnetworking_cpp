@@ -427,7 +427,7 @@ namespace Winsock
 }
 
 // Initialize winsock hooks on startup.
-namespace
+namespace Winsock
 {
     struct WSLoader
     {
@@ -442,21 +442,21 @@ namespace
             }}
 
             // Winsock hooks.
-            INSTALL_HOOK("bind", Winsock::Bind);
-            INSTALL_HOOK("connect", Winsock::Connect);
-            INSTALL_HOOK("ioctlsocket", Winsock::IOControlsocket);
-            INSTALL_HOOK("recv", Winsock::Receive);
-            INSTALL_HOOK("recvfrom", Winsock::Receivefrom);
-            INSTALL_HOOK("select", Winsock::Select);
-            INSTALL_HOOK("send", Winsock::Send);
-            INSTALL_HOOK("sendto", Winsock::Sendto);
-            INSTALL_HOOK("gethostbyname", Winsock::Gethostbyname);
-            INSTALL_HOOK("getaddrinfo", Winsock::Getaddrinfo);
-            INSTALL_HOOK("getpeername", Winsock::Getpeername);
-            INSTALL_HOOK("getsockname", Winsock::Getsockname);
-            INSTALL_HOOK("closesocket", Winsock::Closesocket);
-            INSTALL_HOOK("shutdown", Winsock::Shutdown);
-            
+            INSTALL_HOOK("bind", Bind);
+            INSTALL_HOOK("connect", Connect);
+            INSTALL_HOOK("ioctlsocket", IOControlsocket);
+            INSTALL_HOOK("recv", Receive);
+            INSTALL_HOOK("recvfrom", Receivefrom);
+            INSTALL_HOOK("select", Select);
+            INSTALL_HOOK("send", Send);
+            INSTALL_HOOK("sendto", Sendto);
+            INSTALL_HOOK("gethostbyname", Gethostbyname);
+            INSTALL_HOOK("getaddrinfo", Getaddrinfo);
+            INSTALL_HOOK("getpeername", Getpeername);
+            INSTALL_HOOK("getsockname", Getsockname);
+            INSTALL_HOOK("closesocket", Closesocket);
+            INSTALL_HOOK("shutdown", Shutdown);
+
             // TODO(Convery): Hook all WS functions.
         }
     };
