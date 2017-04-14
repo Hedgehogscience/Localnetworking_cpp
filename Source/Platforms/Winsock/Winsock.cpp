@@ -279,6 +279,7 @@ namespace Winsock
 
         return Length;
     }
+
     hostent *__stdcall Gethostbyname(const char *Hostname)
     {
         IServer *Server = Createserver(Hostname);
@@ -316,6 +317,36 @@ namespace Winsock
         DebugPrint(va("%s: \"%s\" -> %s", __func__, Hostname, inet_ntoa(*(in_addr*)Localhost->h_addr_list[0])).c_str());
         return Localhost;
     }
+    int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
+    {
+        int WSResult = 0;
+        IServer *Server = Createserver(Nodename);
+
+        // Resolve the hostname through winsock to allocate the result struct.
+        if (Hints) Hints->ai_family = PF_INET;
+        if (!Server) CALLWS(getaddrinfo, &WSResult, Nodename, Servicename, Hints, Result);
+
+        // Modify the structure to match our serverinfo.
+        if (Server)
+        {
+            // Resolve a known hostname if the previous call failed.
+            if (0 != WSResult) CALLWS(getaddrinfo, &WSResult, "localhost", nullptr, Hints, Result);
+            if (0 != WSResult) return WSResult;
+
+            // Create a fake IP from the hostname.
+            uint32_t IPv4 = Hash::FNV1a_32(Nodename);
+            uint8_t *IP = (uint8_t *)&IPv4;
+
+            // Set the IP for all records.
+            for (ADDRINFOA *ptr = *Result; ptr != NULL; ptr = ptr->ai_next)
+            {
+                ((sockaddr_in *)ptr->ai_addr)->sin_addr.S_un.S_addr = inet_addr(va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]).c_str());
+            }
+        }
+
+        DebugPrint(va("%s: \"%s\" -> %s", __func__, Nodename, inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)).c_str());
+        return WSResult;
+    }
 
     // TODO(Convery): Implement all WS functions.
 }
@@ -345,6 +376,7 @@ namespace
             INSTALL_HOOK("send", Winsock::Send);
             INSTALL_HOOK("sendto", Winsock::Sendto);
             INSTALL_HOOK("gethostbyname", Winsock::Gethostbyname);
+            INSTALL_HOOK("getaddrinfo", Winsock::Getaddrinfo);
 
             // TODO(Convery): Hook all WS functions.
         }
