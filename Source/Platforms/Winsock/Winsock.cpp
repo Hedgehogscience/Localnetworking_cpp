@@ -21,7 +21,7 @@ namespace Winsock
     // The hooks installed in ws2_32.dll
     std::unordered_map<std::string, void *> WSHooks;
     #define CALLWS(_Function, _Result, ...) {                           \
-    auto Pointer = WSHooks[__FUNCTION__];                               \
+    auto Pointer = WSHooks[__func__];                                   \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
     Hook->Removehook();                                                 \
     *_Result = Hook->Function(__VA_ARGS__);                             \
@@ -76,15 +76,17 @@ namespace Winsock
 
         // If there's no socket connected, try to create one by address.
         if (!Server) Server = Createserver(Socket, Plainaddress(Name));
-        if (!Server) CALLWS(connect, &Result, Socket, Name, Namelength);
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
         {
             ((IServerEx *)Server)->onConnect(Socket, Port);
         }
 
+        // Even if we handle the socket, we'll call connect to mark it as active.
+        CALLWS(connect, &Result, Socket, Name, Namelength);
+
         // Debug information.
         DebugPrint(va("%s to %s:%u", 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), Port).c_str());
-        return Result;
+        return 0;
     }
     int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *pArgument)
     {
