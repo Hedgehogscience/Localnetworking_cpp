@@ -23,15 +23,19 @@ namespace Winsock
     #define CALLWS(_Function, _Result, ...) {                           \
     auto Pointer = WSHooks[__func__];                                   \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
+    Hook->Function.first.lock();                                        \
     Hook->Removehook();                                                 \
-    *_Result = Hook->Function(__VA_ARGS__);                             \
-    Hook->Reinstall(); }
+    *_Result = Hook->Function.second(__VA_ARGS__);                      \
+    Hook->Reinstall();                                                  \
+    Hook->Function.first.unlock(); }
     #define CALLWS_NORET(_Function, ...) {                              \
-    auto Pointer = WSHooks[__FUNCTION__];                               \
+    auto Pointer = WSHooks[__func__];                                   \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
+    Hook->Function.first.lock();                                        \
     Hook->Removehook();                                                 \
-    Hook->Function(__VA_ARGS__);                                        \
-    Hook->Reinstall(); }
+    Hook->Function.second(__VA_ARGS__);                                 \
+    Hook->Reinstall();                                                  \
+    Hook->Function.first.unlock(); }
 
     // Helpers.
     std::unordered_map<size_t /* Socket */, bool /* Blocking */> Shouldblock;
