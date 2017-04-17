@@ -70,7 +70,7 @@ namespace Winsock
 
         // Disconnect any existing server instance.
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
-            ((IServerEx *)Server)->onDisconnect(Socket);
+            (reinterpret_cast<IServerEx *>(Server))->onDisconnect(Socket);
 
         // Get the port the game wants to use.
         if (Name->sa_family == AF_INET6)
@@ -82,14 +82,14 @@ namespace Winsock
         if (!Server) Server = Createserver(Socket, Plainaddress(Name));
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
         {
-            ((IServerEx *)Server)->onConnect(Socket, Port);
+            (reinterpret_cast<IServerEx *>(Server))->onConnect(Socket, Port);
         }
 
         // Even if we handle the socket, we'll call connect to mark it as active.
         CALLWS(connect, &Result, Socket, Name, Namelength);
 
         // Debug information.
-        DebugPrint(va("%s to %s:%u", 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), Port).c_str());
+        DebugPrint(va("%s to %s:%u", Server || 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), Port).c_str());
         return 0;
     }
     int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *pArgument)
@@ -262,6 +262,8 @@ namespace Winsock
             }
         }
 
+        // Debug information.
+        DebugPrint(va("Sending %i bytes to server %s", Length, Server ? Findaddress(Socket).c_str() : va("external (socket %X)", Socket).c_str()).c_str());
         return Length;
     }
     int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, const struct sockaddr *To, int Tolength)
@@ -291,7 +293,7 @@ namespace Winsock
         }
 
         // Debug information.
-        DebugPrint(va("Sending %i bytes to external server %s:%u", Length, Plainaddress(To).c_str(), To->sa_family == AF_INET6 ? ntohs(((sockaddr_in6 *)To)->sin6_port) : ntohs(((sockaddr_in *)To)->sin_port)).c_str());
+        DebugPrint(va("Sending %i bytes to server %s:%u", Length, !Server ? Plainaddress(To).c_str() : "Internal", To->sa_family == AF_INET6 ? ntohs(((sockaddr_in6 *)To)->sin6_port) : ntohs(((sockaddr_in *)To)->sin_port)).c_str());
         return Length;
     }
 
