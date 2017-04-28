@@ -106,7 +106,7 @@ struct IStreamserver : IServerEx
             Streamguard[lSocket].lock();
             {
                 auto Pointer = reinterpret_cast<const uint8_t *>(Databuffer);
-                std::copy_n(Pointer, Datasize, std::back_inserter(Incomingstream[Socket]));
+                std::copy_n(Pointer, Datasize, std::back_inserter(Outgoingstream[Socket]));
             }
             Streamguard[lSocket].unlock();
         };

@@ -123,7 +123,7 @@ namespace Winsock
     }
     int __stdcall Receive(size_t Socket, char *Buffer, int Length, int Flags)
     {
-        uint32_t Result = 0;
+        uint32_t Result = Length;
         IServer *Server = Findserver(Socket);
         if (!Server) CALLWS(recv, &Result, Socket, Buffer, Length, Flags);
 
@@ -135,12 +135,18 @@ namespace Winsock
                 IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
 
                 while (false == ServerEx->onReadrequestEx(Socket, Buffer, &Result) && Shouldblock[Socket])
+                {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    Result = Length;
+                }
             }
             else
             {
                 while (false == Server->onReadrequest(Buffer, &Result) && Shouldblock[Socket])
+                {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    Result = Length;
+                }
             }
         }
 
@@ -149,7 +155,7 @@ namespace Winsock
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
     {
-        uint32_t Result = 0;
+        uint32_t Result = Length;
         IServer *Server = Findserver(Socket);
         if (!Server) CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
 
@@ -161,12 +167,18 @@ namespace Winsock
                 IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
 
                 while (false == ServerEx->onReadrequestEx(Socket, Buffer, &Result) && Shouldblock[Socket])
+                {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    Result = Length;
+                }
             }
             else
             {
                 while (false == Server->onReadrequest(Buffer, &Result) && Shouldblock[Socket])
+                {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    Result = Length;
+                }
             }
 
             // Return the host information.
