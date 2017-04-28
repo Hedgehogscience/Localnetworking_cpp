@@ -99,7 +99,7 @@ namespace Winsock
 
         switch (Command)
         {
-            case FIONBIO: 
+            case FIONBIO:
             {
                 Readable = "FIONBIO";
                 Shouldblock[Socket] = *pArgument == 0;
@@ -116,7 +116,7 @@ namespace Winsock
 
         // Debug information.
         DebugPrint(va("Socket 0x%X modified %s", Socket, Readable).c_str());
-        
+
         // Call the IOControl on the actual socket.
         CALLWS(ioctlsocket, &Result, Socket, Command, pArgument);
         return Result;
@@ -305,11 +305,7 @@ namespace Winsock
             static hostent *Resolvedhost;
             CALLWS(gethostbyname, &Resolvedhost, Hostname);
 
-            if (Resolvedhost)
-            {
-                DebugPrint(va("%s: \"%s\" -> %s", __func__, Hostname, inet_ntoa(*(in_addr*)Resolvedhost->h_addr_list[0])).c_str());
-            }
-
+            DebugPrint(va("%s: \"%s\" -> %s", __func__, Hostname, Resolvedhost ? inet_ntoa(*(in_addr*)Resolvedhost->h_addr_list[0]) : "Could not resolve").c_str());
             return Resolvedhost;
         }
 
@@ -328,7 +324,7 @@ namespace Winsock
         Localhost->h_aliases = NULL;
         Localhost->h_addrtype = AF_INET;
         Localhost->h_length = sizeof(in_addr);
-        Localhost->h_name = const_cast<char *>(Hostname);        
+        Localhost->h_name = const_cast<char *>(Hostname);
         Localhost->h_addr_list = (char **)LocalsocketAddresslist;
 
         DebugPrint(va("%s: \"%s\" -> %s", __func__, Hostname, inet_ntoa(*(in_addr*)Localhost->h_addr_list[0])).c_str());
@@ -421,7 +417,7 @@ namespace Winsock
     {
         IServer *Server = Findserver(Socket);
         CALLWS_NORET(shutdown, Socket, How);
-        
+
         if (SD_BOTH == How) Disconnectserver(Socket);
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
         {
@@ -430,7 +426,7 @@ namespace Winsock
         }
         return 0;
     }
-    
+
     // TODO(Convery): Implement all WS functions.
 }
 

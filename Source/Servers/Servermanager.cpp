@@ -118,7 +118,7 @@ std::string Findaddress(const IServer *Server)
 
         Result = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
     }
-    
+
     return Result;
 }
 
@@ -153,8 +153,8 @@ std::vector<size_t> Activesockets()
 }
 
 // Load all modules from /Localnetworking/ on startup.
-namespace 
-{ 
+namespace
+{
     struct Moduleloader
     {
         Moduleloader()
