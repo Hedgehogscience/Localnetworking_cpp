@@ -179,6 +179,9 @@ namespace
                     auto Module = LoadModule((Path + Item).c_str());
                     if (!Module) continue;
 
+                    // Log this event.
+                    DebugPrint(va("Loaded module: \"%s\"", (Path + Item).c_str()).c_str());
+
                     // Add to the internal vector.
                     Networkmodules.push_back(Module);
                 }
