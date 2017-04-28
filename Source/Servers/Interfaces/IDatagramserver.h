@@ -23,14 +23,8 @@ struct IDatagramserver : IServer
     // Return the capabilities of this server.
     virtual const uint64_t Capabilities() { return ISERVER_BASE | ISERVER_DATAGRAM; };
 
-    // Callback on incoming data, wrapper unlocks the mutex if the user forgets.
+    // Callback on incoming data.
     virtual void onPacket(std::string &Packet) = 0;
-    static void onPacketwrapper(IDatagramserver *Server, std::string Packet)
-    {
-        Server->onPacket(Packet);
-        Server->Packetguard.try_lock();
-        Server->Packetguard.unlock();
-    }
 
     // Returns false if there's an error, like there being no data or connection.
     virtual bool onWriterequest(const void *Databuffer, const uint32_t Datasize)
@@ -39,9 +33,12 @@ struct IDatagramserver : IServer
         {
             // Callback to usercode.
             auto Pointer = reinterpret_cast<const char *>(Databuffer);
-            std::thread(onPacketwrapper, this, std::string(Pointer, Datasize)).detach();
+            auto Packet = std::string(Pointer, Datasize);
+            onPacket(Packet);
         }
-        // Unlocked in the new thread.
+        // Unlock if needed.
+        Packetguard.try_lock();
+        Packetguard.unlock();
 
         return true;
     }

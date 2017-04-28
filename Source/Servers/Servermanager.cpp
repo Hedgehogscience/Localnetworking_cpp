@@ -139,6 +139,7 @@ void Disconnectserver(const IServer *Server)
         if (Item.second == Server)
         {
             ServersbyAddress.erase(Item.first);
+            return;
         }
     }
 }

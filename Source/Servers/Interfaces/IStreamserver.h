@@ -49,14 +49,8 @@ struct IStreamserver : IServerEx
         Streamguard[Socket].unlock();
     }
 
-    // Callback on incoming data, wrapper unlocks the mutex if the user forgets.
+    // Callback on incoming data.
     virtual void onStreamupdate(const size_t Socket, std::vector<uint8_t> &Stream) = 0;
-    static void onStreamupdatewrapper(IStreamserver *Server, const size_t Socket)
-    {
-        Server->onStreamupdate(Socket, Server->Incomingstream[Socket]);
-        Server->Streamguard[Socket].try_lock();
-        Server->Streamguard[Socket].unlock();
-    }
 
     // Returns false if there's an error, like there being no data or connection.
     virtual bool onWriterequestEx(const size_t Socket, const void *Databuffer, const uint32_t Datasize)
@@ -68,12 +62,14 @@ struct IStreamserver : IServerEx
         Streamguard[Socket].lock();
         {
             auto Pointer = reinterpret_cast<const uint8_t *>(Databuffer);
-            std::copy_n(Pointer, Datasize, std::back_inserter(Incomingstream[Socket]));  
+            std::copy_n(Pointer, Datasize, std::back_inserter(Incomingstream[Socket]));
 
             // Callback to usercode.
-            std::thread(onStreamupdatewrapper, this, Socket).detach();
+            onStreamupdate(Socket, Incomingstream[Socket]);
         }
-        // Unlocked in the new thread.
+        // Unlock if needed.
+        Streamguard[Socket].try_lock();
+        Streamguard[Socket].unlock();
 
         return true;
     }
@@ -98,7 +94,7 @@ struct IStreamserver : IServerEx
             Outgoingstream[Socket].erase(Outgoingstream[Socket].begin(), Outgoingstream[Socket].begin() + Readcount);
         }
         Streamguard[Socket].unlock();
-        
+
         return true;
     }
 
@@ -110,7 +106,7 @@ struct IStreamserver : IServerEx
             Streamguard[lSocket].lock();
             {
                 auto Pointer = reinterpret_cast<const uint8_t *>(Databuffer);
-                std::copy_n(Pointer, Datasize, std::back_inserter(Incomingstream[Socket]));          
+                std::copy_n(Pointer, Datasize, std::back_inserter(Incomingstream[Socket]));
             }
             Streamguard[lSocket].unlock();
         };
