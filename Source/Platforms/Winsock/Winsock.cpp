@@ -90,7 +90,7 @@ namespace Winsock
 
         // Debug information.
         DebugPrint(va("%s to %s:%u", Server || 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), Port).c_str());
-        return 0;
+        return Server || 0 == Result ? 0 : -1;
     }
     int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *pArgument)
     {
