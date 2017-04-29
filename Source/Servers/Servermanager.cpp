@@ -18,6 +18,7 @@ void *LoadModule(const char *Path);
 std::vector<void * /* Handles */> Networkmodules;
 std::unordered_map<size_t /* Socket */, IServer * /* Server */> ServersbySocket;
 std::unordered_map<std::string /* Address */, IServer * /* Server */> ServersbyAddress;
+std::unordered_map<std::string /* Address */, std::string /* Hostname */> Resolvedservers;
 
 // Create a server based on the hostname, returns null if there's no handler.
 IServer *Createserver(const size_t Socket, std::string Hostname)
@@ -29,6 +30,10 @@ IServer *Createserver(const size_t Socket, std::string Hostname)
 }
 IServer *Createserver(std::string Hostname)
 {
+    // Check if already resolved.
+    if (Resolvedservers.find(Hostname) != Resolvedservers.end())
+        Hostname = Resolvedservers[Hostname];
+
     for (auto &Item : Networkmodules)
     {
         // Find the export in the module.
@@ -46,6 +51,7 @@ IServer *Createserver(std::string Hostname)
 
             ServersbyAddress[Hostname] = Result;
             ServersbyAddress[va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3])] = Result;
+            Resolvedservers[va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3])] = Hostname;
             return Result;
         }
     }
