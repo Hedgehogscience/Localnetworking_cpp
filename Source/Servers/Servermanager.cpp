@@ -117,7 +117,7 @@ std::string Findaddress(const IServer *Server)
     }
 
     // If there's no IP, create one.
-    if (0 == Result.size())
+    if (0 == Result.size() && Candidates.size())
     {
         uint32_t IPv4 = Hash::FNV1a_32(Candidates[0]);
         uint8_t *IP = (uint8_t *)&IPv4;
