@@ -169,14 +169,6 @@ namespace
             std::vector<std::string> Filenames;
             std::string Path = "./Plugins/Localnetworking/";
 
-            /*
-                Some emulated networks depend on certain libraries.
-                We can not assume that the user has these installed.
-                So we try to load them from the /Localnetworking/ dir.
-            */
-            LoadModule((Path + "libeay32").c_str());
-            LoadModule((Path + "ssleay32").c_str());
-
             // Enumerate all modules in the directory.
             if (Listfiles(Path, &Filenames, "Networkmodule"))
             {
@@ -184,7 +176,11 @@ namespace
                 {
                     // Load the library into memory.
                     auto Module = LoadModule((Path + Item).c_str());
-                    if (!Module) continue;
+                    if (!Module)
+                    {
+                        DebugPrint(va("Failed to load module: \"%s\"", (Path + Item).c_str()).c_str());
+                        continue;
+                    }
 
                     // Log this event.
                     DebugPrint(va("Loaded module: \"%s\"", (Path + Item).c_str()).c_str());
