@@ -9,8 +9,8 @@
 
 // Forward declarations for  platform specific functionality.
 bool Findfiles(std::string Searchpath, std::vector<std::string> *Filenames);
-void *FindFunction(void *Module, const char *Function);
-void *LoadModule(const char *Path);
+void *Findfunction(void *Module, const char *Function);
+void *Loadmodule(const char *Path);
 
 // Module and server storage.
 std::vector<void * /* Handles */> Networkmodules;
@@ -35,7 +35,7 @@ IServer *Createserver(std::string Hostname)
     for (auto &Item : Networkmodules)
     {
         // Find the export in the module.
-        auto pFunction = FindFunction(Item, "Createserver");
+        auto pFunction = Findfunction(Item, "Createserver");
         if (!pFunction) continue;
 
         // Ask the module to create a new instance for the hostname.
@@ -173,7 +173,7 @@ namespace
                 for (auto &Item : Filenames)
                 {
                     // Load the library into memory.
-                    auto Module = LoadModule((Path + Item).c_str());
+                    auto Module = Loadmodule((Path + Item).c_str());
                     if (!Module)
                     {
                         Debugprint(va("Failed to load module: \"%s\"", (Path + Item).c_str()));
@@ -196,11 +196,11 @@ namespace
 #ifdef _WIN32
 #include <Windows.h>
 #include <direct.h>
-void *FindFunction(void *Module, const char *Function)
+void *Findfunction(void *Module, const char *Function)
 {
     return (void *)GetProcAddress(HMODULE(Module), Function);
 }
-void *LoadModule(const char *Path)
+void *Loadmodule(const char *Path)
 {
     return (void *)LoadLibraryA(Path);
 }
@@ -242,11 +242,11 @@ bool Findfiles(std::string Searchpath, std::vector<std::string> *Filenames)
 #include <dirent.h>
 #include <dlfcn.h>
 
-void *FindFunction(void *Module, const char *Function)
+void *Findfunction(void *Module, const char *Function)
 {
     return (void *)dlsym(Module, Function);
 }
-void *LoadModule(const char *Path)
+void *Loadmodule(const char *Path)
 {
     return (void *)dlopen(Path, RTLD_LAZY);
 }
