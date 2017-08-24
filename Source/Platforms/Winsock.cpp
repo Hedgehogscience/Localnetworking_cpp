@@ -6,7 +6,7 @@
         Interface shim for windows sockets.
 */
 
-#include "../StdInclude.h"
+#include "../Stdinclude.h"
 
 #if defined (_WIN32)
 #include <Windows.h>

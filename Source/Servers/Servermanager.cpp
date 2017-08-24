@@ -5,14 +5,11 @@
     Notes:
 */
 
-#include "../StdInclude.h"
-#include "Servers.h"
-#include <unordered_map>
-#include <functional>
+#include "../Stdinclude.h"
 
 // Forward declarations for  platform specific functionality.
 bool Findfiles(std::string Searchpath, std::vector<std::string> *Filenames);
-void *FindFunction(const void *Module, const char *Function);
+void *FindFunction(void *Module, const char *Function);
 void *LoadModule(const char *Path);
 
 // Module and server storage.
@@ -199,7 +196,7 @@ namespace
 #ifdef _WIN32
 #include <Windows.h>
 #include <direct.h>
-void *FindFunction(const void *Module, const char *Function)
+void *FindFunction(void *Module, const char *Function)
 {
     return (void *)GetProcAddress(HMODULE(Module), Function);
 }
@@ -245,7 +242,7 @@ bool Findfiles(std::string Searchpath, std::vector<std::string> *Filenames)
 #include <dirent.h>
 #include <dlfcn.h>
 
-void *FindFunction(const void *Module, const char *Function)
+void *FindFunction(void *Module, const char *Function)
 {
     return (void *)dlsym(Module, Function);
 }
