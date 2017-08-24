@@ -162,7 +162,7 @@
     <ClInclude Include="Source\Servers\Interfaces\IServer.h" />
     <ClInclude Include="Source\Servers\Interfaces\IStreamserver.h" />
     <ClInclude Include="Source\Servers\Servers.h" />
-    <ClInclude Include="Source\StdInclude.h" />
+    <ClInclude Include="Source\Stdinclude.h" />
     <ClInclude Include="Source\Utility\Binary\Hooking.h" />
     <ClInclude Include="Source\Utility\Binary\Memprotect.h" />
     <ClInclude Include="Source\Utility\Binary\Patternscan.h" />
