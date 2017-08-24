@@ -1,7 +1,8 @@
 /*
-    Initial author: Convery
-    Started: 2017-4-13
-    License: Apache 2.0
+    Initial author: Convery (tcn@ayria.se)
+    Started: 24-08-2017
+    License: MIT
+    Notes:
 */
 
 #include "../StdInclude.h"
@@ -10,7 +11,7 @@
 #include <functional>
 
 // Forward declarations for  platform specific functionality.
-bool Listfiles(std::string Searchpath, std::vector<std::string> *Filenames, const char *Extension = 0);
+bool Findfiles(std::string Searchpath, std::vector<std::string> *Filenames);
 void *FindFunction(const void *Module, const char *Function);
 void *LoadModule(const char *Path);
 
@@ -46,7 +47,7 @@ IServer *Createserver(std::string Hostname)
 
         if (Result)
         {
-            uint32_t IPv4 = Hash::FNV1a_32(Hostname);
+            uint32_t IPv4 = Hash::FNV1a_32(Hostname.c_str());
             uint8_t *IP = (uint8_t *)&IPv4;
 
             ServersbyAddress[Hostname] = Result;
@@ -119,7 +120,7 @@ std::string Findaddress(const IServer *Server)
     // If there's no IP, create one.
     if (0 == Result.size() && Candidates.size())
     {
-        uint32_t IPv4 = Hash::FNV1a_32(Candidates[0]);
+        uint32_t IPv4 = Hash::FNV1a_32(Candidates[0].c_str());
         uint8_t *IP = (uint8_t *)&IPv4;
 
         Result = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
@@ -170,7 +171,7 @@ namespace
             std::string Path = "./Plugins/Localnetworking/";
 
             // Enumerate all modules in the directory.
-            if (Listfiles(Path, &Filenames, "Networkmodule"))
+            if (Findfiles(Path, &Filenames))
             {
                 for (auto &Item : Filenames)
                 {
@@ -178,12 +179,12 @@ namespace
                     auto Module = LoadModule((Path + Item).c_str());
                     if (!Module)
                     {
-                        DebugPrint(va("Failed to load module: \"%s\"", (Path + Item).c_str()).c_str());
+                        Debugprint(va("Failed to load module: \"%s\"", (Path + Item).c_str()));
                         continue;
                     }
 
                     // Log this event.
-                    DebugPrint(va("Loaded module: \"%s\"", (Path + Item).c_str()).c_str());
+                    Debugprint(va("Loaded module: \"%s\"", (Path + Item).c_str()));
 
                     // Add to the internal vector.
                     Networkmodules.push_back(Module);
@@ -206,18 +207,16 @@ void *LoadModule(const char *Path)
 {
     return (void *)LoadLibraryA(Path);
 }
-bool Listfiles(std::string Searchpath, std::vector<std::string> *Filenames, const char *Extension)
+bool Findfiles(std::string Searchpath, std::vector<std::string> *Filenames)
 {
     WIN32_FIND_DATAA Filedata;
     HANDLE Filehandle;
 
     // Append trailing slash, asterisk and extension.
     if (Searchpath.back() != '/') Searchpath.append("/");
-    Searchpath.append("*");
-    if (Extension) Searchpath.append(".");
-    if (Extension) Searchpath.append(Extension);
+    Searchpath.append("*.LNmodule");
 
-    // Find the first extension.
+    // Find the first plugin.
     Filehandle = FindFirstFileA(Searchpath.c_str(), &Filedata);
     if (Filehandle == (void *)ERROR_INVALID_HANDLE || Filehandle == (void *)INVALID_HANDLE_VALUE)
     {
@@ -227,7 +226,7 @@ bool Listfiles(std::string Searchpath, std::vector<std::string> *Filenames, cons
 
     do
     {
-        // Respect hidden files.
+        // Respect hidden files and folders.
         if (Filedata.cFileName[0] == '.')
             continue;
 
@@ -241,27 +240,24 @@ bool Listfiles(std::string Searchpath, std::vector<std::string> *Filenames, cons
     return !!Filenames->size();
 }
 #else
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <dlfcn.h>
+
 void *FindFunction(const void *Module, const char *Function)
 {
     return (void *)dlsym(Module, Function);
 }
 void *LoadModule(const char *Path)
 {
-    return (void *)dlopen(Path, RTLD_NOW);
+    return (void *)dlopen(Path, RTLD_LAZY);
 }
-bool Listfiles(std::string Searchpath, std::vector<std::string> *Filenames, const char *Extension)
+bool Findfiles(std::string Searchpath, std::vector<std::string> *Filenames)
 {
     struct stat Fileinfo;
     dirent *Filedata;
-    std::string Path;
     DIR *Filehandle;
-
-    // Append trailing slash, asterisk and extension.
-    if (Searchpath.back() != '/') Searchpath.append("/");
-    Path = Searchpath;
-    Searchpath.append("*");
-    if (Extension) Searchpath.append(".");
-    if (Extension) Searchpath.append(Extension);
 
     // Iterate through the directory.
     Filehandle = opendir(Searchpath.c_str());
@@ -272,11 +268,11 @@ bool Listfiles(std::string Searchpath, std::vector<std::string> *Filenames, cons
             continue;
 
         // Get extended fileinfo.
-        std::string Filepath = Path + "/" + Filedata->d_name;
+        std::string Filepath = Searchpath + "/" + Filedata->d_name;
         if (stat(Filepath.c_str(), &Fileinfo) == -1) continue;
 
         // Add the file to the list.
-        if (!(Fileinfo.st_mode & S_IFDIR))
+        if (!(Fileinfo.st_mode & S_IFDIR) && std::strstr(Filedata->d_name, ".LNmodule"))
             Filenames->push_back(Filedata->d_name);
     }
     closedir(Filehandle);
