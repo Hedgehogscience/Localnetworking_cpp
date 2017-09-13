@@ -164,7 +164,7 @@ namespace
         Moduleloader()
         {
             std::vector<std::string> Filenames;
-            std::string Path = "./Plugins/Localnetworking/";
+            std::string Path = "./Plugins/" MODULENAME;
 
             // Enumerate all modules in the directory.
             if (Findfiles(Path, &Filenames, ".LNmodule"))

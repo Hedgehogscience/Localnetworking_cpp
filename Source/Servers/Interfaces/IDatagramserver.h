@@ -85,4 +85,3 @@ struct IDatagramserver : IServer
         return Send({ reinterpret_cast<const char *>(Databuffer), Datasize });
     }
 };
-
