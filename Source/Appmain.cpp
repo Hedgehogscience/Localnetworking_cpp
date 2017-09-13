@@ -34,6 +34,7 @@ extern "C"
             communicating with other plugins and modify the games .data segment.
             ----------------------------------------------------------------------
         */
+        Printfunction();
     }
     EXPORT_ATTR void onMessage(uint32_t MessageID, uint32_t Messagesize, const void *Messagedata)
     {
@@ -58,7 +59,6 @@ extern "C"
 
 // Default entrypoint for windows.
 #ifdef _WIN32
-#include <Windows.h>
 BOOLEAN WINAPI DllMain(HINSTANCE hDllHandle, DWORD nReason, LPVOID Reserved)
 {
     switch (nReason)
