@@ -34,7 +34,6 @@ extern "C"
             communicating with other plugins and modify the games .data segment.
             ----------------------------------------------------------------------
         */
-        Printfunction();
     }
     EXPORT_ATTR void onMessage(uint32_t MessageID, uint32_t Messagesize, const void *Messagedata)
     {

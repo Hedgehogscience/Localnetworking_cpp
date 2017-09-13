@@ -39,7 +39,6 @@
 #include <unistd.h>
 #endif
 
-
 // Includes for thirdparty libraries.
 /* ... */
 
