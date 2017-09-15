@@ -76,7 +76,7 @@ struct IStreamserver : IServerEx
     virtual bool onReadrequestEx(const size_t Socket, void *Databuffer, uint32_t *Datasize)
     {
         // To support lingering connections, we return data even if disconnected.
-        if (false == Connectedstreams[Socket] && 0 == Outgoingstream[Socket].size())
+        if (0 == Outgoingstream[Socket].size() || (false == Connectedstreams[Socket] && 0 == Outgoingstream[Socket].size()))
             return false;
 
         // While it should never be null, just to be safe.
