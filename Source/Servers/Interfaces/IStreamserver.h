@@ -77,7 +77,7 @@ struct IStreamserver : IServerEx
     virtual bool onReadrequestEx(const size_t Socket, void *Databuffer, uint32_t *Datasize)
     {
         // To support lingering connections, we return data even if disconnected.
-        if (false == Connectedstreams[Socket] && 0 == Outgoingstream[Socket].size())
+        if (0 == Outgoingstream[Socket].size() || (false == Connectedstreams[Socket] && 0 == Outgoingstream[Socket].size()))
             return false;
 
         // While it should never be null, just to be safe.
@@ -107,7 +107,7 @@ struct IStreamserver : IServerEx
             Streamguard[lSocket].lock();
             {
                 auto Pointer = reinterpret_cast<const uint8_t *>(Databuffer);
-                std::copy_n(Pointer, Datasize, std::back_inserter(Outgoingstream[Socket]));
+                std::copy_n(Pointer, Datasize, std::back_inserter(Outgoingstream[lSocket]));
             }
             Streamguard[lSocket].unlock();
         };
