@@ -128,6 +128,7 @@ namespace Winsock
     }
     int __stdcall Receive(size_t Socket, char *Buffer, int Length, int Flags)
     {
+        bool Successful = false;
         uint32_t Result = Length;
         IServer *Server = Findserver(Socket);
         if (!Server) CALLWS(recv, &Result, Socket, Buffer, Length, Flags);
@@ -139,27 +140,29 @@ namespace Winsock
             {
                 IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
 
-                while (false == ServerEx->onReadrequestEx(Socket, Buffer, &Result) && Shouldblock[Socket])
+                do
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    Result = Length;
-                }
+                    Successful = ServerEx->onReadrequestEx(Socket, Buffer, &Result);
+                    if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                } while (!Successful && Shouldblock[Socket]);
             }
             else
             {
-                while (false == Server->onReadrequest(Buffer, &Result) && Shouldblock[Socket])
+                do
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    Result = Length;
-                }
+                    Successful = Server->onReadrequest(Buffer, &Result);
+                    if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                } while (!Successful && Shouldblock[Socket]);
             }
         }
 
+        if (Server && !Successful) return -1;
         if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
     {
+        bool Successful = false;
         uint32_t Result = Length;
         IServer *Server = Findserver(Socket);
         if (!Server) CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
@@ -171,19 +174,19 @@ namespace Winsock
             {
                 IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
 
-                while (false == ServerEx->onReadrequestEx(Socket, Buffer, &Result) && Shouldblock[Socket])
+                do
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    Result = Length;
-                }
+                    Successful = ServerEx->onReadrequestEx(Socket, Buffer, &Result);
+                    if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                } while (!Successful && Shouldblock[Socket]);
             }
             else
             {
-                while (false == Server->onReadrequest(Buffer, &Result) && Shouldblock[Socket])
+                do
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    Result = Length;
-                }
+                    Successful = Server->onReadrequest(Buffer, &Result);
+                    if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                } while (!Successful && Shouldblock[Socket]);
             }
 
             // Return the host information.
@@ -191,6 +194,7 @@ namespace Winsock
             *Fromlength = int(Hostinfo[Socket].size());
         }
 
+        if (Server && !Successful) return -1;
         if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
