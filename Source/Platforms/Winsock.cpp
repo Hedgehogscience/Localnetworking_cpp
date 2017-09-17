@@ -42,7 +42,9 @@ namespace Winsock
     #pragma endregion
 
     #pragma region Helpers
-    std::unordered_map<size_t /* Socket */, bool /* Blocking */> Shouldblock;
+    std::unordered_map<IServer *, bool /* Active */ > Datagramservers;
+    std::unordered_map<size_t /* Socket */, bool /* Blocking */> Anyserver;
+    std::unordered_map<size_t /* Socket */, bool /* Blocking */> isNonblocking;
     std::unordered_map<size_t /* Socket */, std::string /* Hostinfo */> Hostinfo;
     std::string Plainaddress(const struct sockaddr *Sockaddr)
     {
@@ -63,8 +65,12 @@ namespace Winsock
         int Result = 0;
         IServer *Server = Findserver(Socket);
         if (!Server) Server = Findserver(Plainaddress(Name));
+        if (!Server) Server = Createserver(Socket, Plainaddress(Name));
         if (!Server) CALLWS(bind, &Result, Socket, Name, Namelength);
+        if (Server) isNonblocking[Socket];
 
+        if (*(uint32_t *)&Name->sa_data[2] == 0) Anyserver[Socket] = true;
+        else Anyserver[Socket] = false;
         return Result;
     }
     int __stdcall Connect(size_t Socket, const struct sockaddr *Name, int Namelength)
@@ -72,6 +78,7 @@ namespace Winsock
         int Result = 0;
         short Port = 0;
         IServer *Server = Findserver(Socket);
+        if (Server) isNonblocking[Socket];
 
         // Disconnect any existing server instance.
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
@@ -107,7 +114,7 @@ namespace Winsock
             case FIONBIO:
             {
                 Readable = "FIONBIO";
-                Shouldblock[Socket] = *pArgument == 0;
+                isNonblocking[Socket] = *pArgument != 0;
                 break;
             }
             case FIONREAD: Readable = "FIONREAD"; break;
@@ -144,7 +151,7 @@ namespace Winsock
                 {
                     Successful = ServerEx->onReadrequestEx(Socket, Buffer, &Result);
                     if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                } while (!Successful && Shouldblock[Socket]);
+                } while (!Successful && !isNonblocking[Socket]);
             }
             else
             {
@@ -152,7 +159,7 @@ namespace Winsock
                 {
                     Successful = Server->onReadrequest(Buffer, &Result);
                     if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                } while (!Successful && Shouldblock[Socket]);
+                } while (!Successful && !isNonblocking[Socket]);
             }
         }
 
@@ -162,39 +169,70 @@ namespace Winsock
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
     {
+        /*
+            TODO(Convery):
+            As we don't copy the packets and have a queue per socket,
+            this may cause issues with the wrong socket getting the
+            packet. Not sure about the best way to solve this problem.
+        */
+
         bool Successful = false;
         uint32_t Result = Length;
-        IServer *Server = Findserver(Socket);
-        if (!Server) CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
-
-        // While on a blocking server, poll the server every 10ms.
-        if (Server)
+        auto Lambda = [&](IServer *Server) -> bool
         {
-            if (Server->Capabilities() & ISERVER_EXTENDED)
-            {
-                IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
+            bool Successful = false;
 
-                do
-                {
-                    Successful = ServerEx->onReadrequestEx(Socket, Buffer, &Result);
-                    if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                } while (!Successful && Shouldblock[Socket]);
-            }
-            else
+            if (Server)
             {
-                do
+                if (Server->Capabilities() & ISERVER_EXTENDED)
+                {
+                    IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
+                    Successful = ServerEx->onReadrequestEx(Socket, Buffer, &Result);
+                }
+                else
                 {
                     Successful = Server->onReadrequest(Buffer, &Result);
-                    if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                } while (!Successful && Shouldblock[Socket]);
+                }
             }
 
-            // Return the host information.
-            std::memcpy(From, Hostinfo[Socket].data(), Hostinfo[Socket].size());
-            *Fromlength = int(Hostinfo[Socket].size());
-        }
+            return Successful;
+        };
 
-        if (Server && !Successful) return -1;
+        // If we are blocking, poll until we get a packet.
+        do
+        {
+            // Check if it's a single-server socket.
+            Successful = Lambda(Findserver(Socket));
+            if (Successful) break;
+            Result = Length;
+
+            // Check if it's a multi-server socket.
+            if (Anyserver[Socket])
+            {
+                for (auto &Item : Datagramservers)
+                {
+                    if (Item.second)
+                    {
+                        Successful = Lambda(Item.first);
+                        if (Successful) break;
+                        Result = Length;
+                    }
+                }
+            }
+
+            if (!Successful)
+            {
+                CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
+                Successful = Result != uint32_t(-1);
+                if (!Successful) Result = Length;
+            }
+
+            // Wait 10ms for a packet.
+            if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        while (!Successful && !isNonblocking[Socket]);
+
+        if (!Successful) return -1;
         if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
@@ -293,6 +331,7 @@ namespace Winsock
         if (!Server) Server = Findserver(Plainaddress(To));
         if (!Server) Server = Createserver(Socket, Plainaddress(To));
         if (!Server) CALLWS(sendto, &Length, Socket, Buffer, Length, Flags, To, Tolength);
+        if (Server) Datagramservers[Server] = true;
 
         if (Server)
         {
@@ -424,6 +463,9 @@ namespace Winsock
         IServer *Server = Findserver(Socket);
         CALLWS_NORET(closesocket, Socket);
         Disconnectserver(Socket);
+
+        if (Server) Datagramservers[Server] = false;
+        Anyserver[Socket] = false;
 
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
         {
