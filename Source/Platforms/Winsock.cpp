@@ -20,11 +20,13 @@ namespace Winsock
 {
     #pragma region Hooking
     // Track all the hooks installed into ws2_32.dll by name.
-    std::unordered_map<std::string, void *> WSHooks;
+    std::unordered_map<std::string, void *> WSHooks1;
+    std::unordered_map<std::string, void *> WSHooks2;
 
     // Macros to make calling WS a little easier.
     #define CALLWS(_Function, _Result, ...) {                           \
-    auto Pointer = WSHooks[__func__];                                   \
+    auto Pointer = WSHooks1[__func__];                                  \
+    if(!Pointer) Pointer = WSHooks2[__func__];                          \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
     Hook->Function.first.lock();                                        \
     Hook->Removehook();                                                 \
@@ -32,7 +34,8 @@ namespace Winsock
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
     #define CALLWS_NORET(_Function, ...) {                              \
-    auto Pointer = WSHooks[__func__];                                   \
+    auto Pointer = WSHooks1[__func__];                                  \
+    if(!Pointer) Pointer = WSHooks2[__func__];                          \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
     Hook->Function.first.lock();                                        \
     Hook->Removehook();                                                 \
@@ -519,14 +522,17 @@ namespace Winsock
     {
         WSInstaller()
         {
-            // Another macro to save my fingers.
-            #define INSTALL_HOOK(_Function, _Replacement) {                                                                                 \
-            auto Address = (void *)GetProcAddress(GetModuleHandleA("wsock32.dll"), _Function);                                              \
-            if(!Address) Address = (void *)GetProcAddress(GetModuleHandleA("WS2_32.dll"), _Function);                                       \
-            if(Address) {                                                                                                                   \
-            Winsock::WSHooks[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                           \
-            ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks[#_Replacement])->Installhook(Address, (void *)&_Replacement); \
-            }}
+            // Helper-macro to save the developers fingers.
+            #define INSTALL_HOOK(_Function, _Replacement) {                                                                                     \
+            auto Address = (void *)GetProcAddress(GetModuleHandleA("wsock32.dll"), _Function);                                                  \
+            if(Address) {                                                                                                                       \
+            Winsock::WSHooks1[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
+            ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks1[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
+            Address = (void *)GetProcAddress(GetModuleHandleA("WS2_32.dll"), _Function);                                                        \
+            if(Address) {                                                                                                                       \
+            Winsock::WSHooks2[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
+            ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
+            }                                                                                                                                   \
 
             // Place the hooks directly in winsock.
             INSTALL_HOOK("bind", Bind);
