@@ -43,9 +43,9 @@ namespace Winsock
 
     #pragma region Helpers
     std::unordered_map<IServer *, bool /* Active */ > Datagramservers;
+    std::unordered_map<IServer *, std::string /* Hostinfo */> Hostinfo;
     std::unordered_map<size_t /* Socket */, bool /* Blocking */> Anyserver;
     std::unordered_map<size_t /* Socket */, bool /* Blocking */> isNonblocking;
-    std::unordered_map<size_t /* Socket */, std::string /* Hostinfo */> Hostinfo;
     std::string Plainaddress(const struct sockaddr *Sockaddr)
     {
         auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
@@ -186,12 +186,30 @@ namespace Winsock
             {
                 if (Server->Capabilities() & ISERVER_EXTENDED)
                 {
+                    auto Hackbuffer = std::make_unique<char[]>(Length);
                     IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
-                    Successful = ServerEx->onReadrequestEx(Socket, Buffer, &Result);
+                    std::memcpy(Hackbuffer.get(), Hostinfo[Server].data(), Hostinfo[Server].size());
+
+                    Successful = ServerEx->onReadrequestEx(Socket, Hackbuffer.get(), &Result);
+                    if (Successful)
+                    {
+                        *Fromlength = int(Hostinfo[Server].size());
+                        std::memcpy(Buffer, Hackbuffer.get(), Result);
+                        std::memcpy(From, Hostinfo[Server].data(), Hostinfo[Server].size());
+                    }
                 }
                 else
                 {
-                    Successful = Server->onReadrequest(Buffer, &Result);
+                    auto Hackbuffer = std::make_unique<char[]>(Length);
+                    std::memcpy(Hackbuffer.get(), Hostinfo[Server].data(), Hostinfo[Server].size());
+
+                    Successful = Server->onReadrequest(Hackbuffer.get(), &Result);
+                    if (Successful)
+                    {
+                        *Fromlength = int(Hostinfo[Server].size());
+                        std::memcpy(Buffer, Hackbuffer.get(), Result);
+                        std::memcpy(From, Hostinfo[Server].data(), Hostinfo[Server].size());
+                    }
                 }
             }
 
@@ -336,7 +354,7 @@ namespace Winsock
         if (Server)
         {
             // Create the hostinfo for recvfrom.
-            Hostinfo[Socket] = { (char *)To, size_t(Tolength) };
+            Hostinfo[Server] = { (char *)To, size_t(Tolength) };
 
             if (Server->Capabilities() & ISERVER_EXTENDED)
             {
