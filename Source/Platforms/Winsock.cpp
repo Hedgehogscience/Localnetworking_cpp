@@ -1,27 +1,32 @@
 /*
-    Initial author: Convery
-    Started: 2017-4-13
-    License: Apache 2.0
+    Initial author: Convery (tcn@ayria.se)
+    Started: 24-08-2017
+    License: MIT
+    Notes:
+        Interface shim for windows sockets.
 */
 
-#include "../../StdInclude.h"
-#include "../../Servers/Servers.h"
+#include "../Stdinclude.h"
 
-#ifdef _WIN32
-#include <Windows.h>
-#include <WinSock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
+#if defined (_WIN32)
 
-#undef min
-#undef max
+// Windows annoyance.
+#if defined(min) || defined(max)
+    #undef min
+    #undef max
+#endif
 
 namespace Winsock
 {
-    // The hooks installed in ws2_32.dll
-    std::unordered_map<std::string, void *> WSHooks;
+    #pragma region Hooking
+    // Track all the hooks installed into ws2_32.dll by name.
+    std::unordered_map<std::string, void *> WSHooks1;
+    std::unordered_map<std::string, void *> WSHooks2;
+
+    // Macros to make calling WS a little easier.
     #define CALLWS(_Function, _Result, ...) {                           \
-    auto Pointer = WSHooks[__func__];                                   \
+    auto Pointer = WSHooks1[__func__];                                  \
+    if(!Pointer) Pointer = WSHooks2[__func__];                          \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
     Hook->Function.first.lock();                                        \
     Hook->Removehook();                                                 \
@@ -29,17 +34,21 @@ namespace Winsock
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
     #define CALLWS_NORET(_Function, ...) {                              \
-    auto Pointer = WSHooks[__func__];                                   \
+    auto Pointer = WSHooks1[__func__];                                  \
+    if(!Pointer) Pointer = WSHooks2[__func__];                          \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
     Hook->Function.first.lock();                                        \
     Hook->Removehook();                                                 \
     Hook->Function.second(__VA_ARGS__);                                 \
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
+    #pragma endregion
 
-    // Helpers.
-    std::unordered_map<size_t /* Socket */, bool /* Blocking */> Shouldblock;
-    std::unordered_map<size_t /* Socket */, std::string /* Hostinfo */> Hostinfo;
+    #pragma region Helpers
+    std::unordered_map<IServer *, bool /* Active */ > Datagramservers;
+    std::unordered_map<IServer *, std::string /* Hostinfo */> Hostinfo;
+    std::unordered_map<size_t /* Socket */, bool /* Blocking */> Anyserver;
+    std::unordered_map<size_t /* Socket */, bool /* Blocking */> isNonblocking;
     std::string Plainaddress(const struct sockaddr *Sockaddr)
     {
         auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
@@ -51,15 +60,20 @@ namespace Winsock
 
         return std::string(Address.get());
     }
+    #pragma endregion
 
-    // Winsock replacements.
+    #pragma region Shims
     int __stdcall Bind(size_t Socket, const struct sockaddr *Name, int Namelength)
     {
         int Result = 0;
         IServer *Server = Findserver(Socket);
         if (!Server) Server = Findserver(Plainaddress(Name));
+        if (!Server) Server = Createserver(Socket, Plainaddress(Name));
         if (!Server) CALLWS(bind, &Result, Socket, Name, Namelength);
+        if (Server) isNonblocking[Socket];
 
+        if (*(uint32_t *)&Name->sa_data[2] == 0) Anyserver[Socket] = true;
+        else Anyserver[Socket] = false;
         return Result;
     }
     int __stdcall Connect(size_t Socket, const struct sockaddr *Name, int Namelength)
@@ -67,6 +81,7 @@ namespace Winsock
         int Result = 0;
         short Port = 0;
         IServer *Server = Findserver(Socket);
+        if (Server) isNonblocking[Socket];
 
         // Disconnect any existing server instance.
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
@@ -89,7 +104,7 @@ namespace Winsock
         CALLWS(connect, &Result, Socket, Name, Namelength);
 
         // Debug information.
-        DebugPrint(va("%s to %s:%u", Server || 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), Port).c_str());
+        Debugprint(va("%s to %s:%u", Server || 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), Port));
         return Server || 0 == Result ? 0 : -1;
     }
     int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *pArgument)
@@ -102,7 +117,7 @@ namespace Winsock
             case FIONBIO:
             {
                 Readable = "FIONBIO";
-                Shouldblock[Socket] = *pArgument == 0;
+                isNonblocking[Socket] = *pArgument != 0;
                 break;
             }
             case FIONREAD: Readable = "FIONREAD"; break;
@@ -115,7 +130,7 @@ namespace Winsock
         }
 
         // Debug information.
-        DebugPrint(va("Socket 0x%X modified %s", Socket, Readable).c_str());
+        Debugprint(va("Socket 0x%X modified %s", Socket, Readable));
 
         // Call the IOControl on the actual socket.
         CALLWS(ioctlsocket, &Result, Socket, Command, pArgument);
@@ -123,6 +138,7 @@ namespace Winsock
     }
     int __stdcall Receive(size_t Socket, char *Buffer, int Length, int Flags)
     {
+        bool Successful = false;
         uint32_t Result = Length;
         IServer *Server = Findserver(Socket);
         if (!Server) CALLWS(recv, &Result, Socket, Buffer, Length, Flags);
@@ -134,58 +150,110 @@ namespace Winsock
             {
                 IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
 
-                while (false == ServerEx->onReadrequestEx(Socket, Buffer, &Result) && Shouldblock[Socket])
+                do
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    Result = Length;
-                }
+                    Successful = ServerEx->onReadrequestEx(Socket, Buffer, &Result);
+                    if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                } while (!Successful && !isNonblocking[Socket]);
             }
             else
             {
-                while (false == Server->onReadrequest(Buffer, &Result) && Shouldblock[Socket])
+                do
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    Result = Length;
-                }
+                    Successful = Server->onReadrequest(Buffer, &Result);
+                    if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                } while (!Successful && !isNonblocking[Socket]);
             }
         }
 
+        if (Server && !Successful) return -1;
         if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
     {
+        /*
+            TODO(Convery):
+            As we don't copy the packets and have a queue per socket,
+            this may cause issues with the wrong socket getting the
+            packet. Not sure about the best way to solve this problem.
+        */
+
+        bool Successful = false;
         uint32_t Result = Length;
-        IServer *Server = Findserver(Socket);
-        if (!Server) CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
-
-        // While on a blocking server, poll the server every 10ms.
-        if (Server)
+        auto Lambda = [&](IServer *Server) -> bool
         {
-            if (Server->Capabilities() & ISERVER_EXTENDED)
-            {
-                IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
+            bool Successful = false;
 
-                while (false == ServerEx->onReadrequestEx(Socket, Buffer, &Result) && Shouldblock[Socket])
+            if (Server)
+            {
+                if (Server->Capabilities() & ISERVER_EXTENDED)
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    Result = Length;
+                    auto Hackbuffer = std::make_unique<char[]>(Length);
+                    IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
+                    std::memcpy(Hackbuffer.get(), Hostinfo[Server].data(), Hostinfo[Server].size());
+
+                    Successful = ServerEx->onReadrequestEx(Socket, Hackbuffer.get(), &Result);
+                    if (Successful)
+                    {
+                        *Fromlength = int(Hostinfo[Server].size());
+                        std::memcpy(Buffer, Hackbuffer.get(), Result);
+                        std::memcpy(From, Hostinfo[Server].data(), Hostinfo[Server].size());
+                    }
+                }
+                else
+                {
+                    auto Hackbuffer = std::make_unique<char[]>(Length);
+                    std::memcpy(Hackbuffer.get(), Hostinfo[Server].data(), Hostinfo[Server].size());
+
+                    Successful = Server->onReadrequest(Hackbuffer.get(), &Result);
+                    if (Successful)
+                    {
+                        *Fromlength = int(Hostinfo[Server].size());
+                        std::memcpy(Buffer, Hackbuffer.get(), Result);
+                        std::memcpy(From, Hostinfo[Server].data(), Hostinfo[Server].size());
+                    }
                 }
             }
-            else
+
+            return Successful;
+        };
+
+        // If we are blocking, poll until we get a packet.
+        do
+        {
+            // Check if it's a single-server socket.
+            Successful = Lambda(Findserver(Socket));
+            if (Successful) break;
+            Result = Length;
+
+            // Check if it's a multi-server socket.
+            if (Anyserver[Socket])
             {
-                while (false == Server->onReadrequest(Buffer, &Result) && Shouldblock[Socket])
+                for (auto &Item : Datagramservers)
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    Result = Length;
+                    if (Item.second)
+                    {
+                        Successful = Lambda(Item.first);
+                        if (Successful) break;
+                        Result = Length;
+                    }
                 }
             }
 
-            // Return the host information.
-            std::memcpy(From, Hostinfo[Socket].data(), Hostinfo[Socket].size());
-            *Fromlength = int(Hostinfo[Socket].size());
+            if (!Successful)
+            {
+                CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
+                Successful = Result != uint32_t(-1);
+                if (!Successful) Result = Length;
+            }
+
+            // Wait 10ms for a packet.
+            if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
+        while (!Successful && !isNonblocking[Socket]);
 
+        if (!Successful) return -1;
         if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
@@ -233,7 +301,7 @@ namespace Winsock
         CALLWS(select, &Result, fdsCount, Readfds, Writefds, Exceptfds, Timeout);
         if (Result < 0) Result = 0;
 
-        for (int i = 0; i < Readsockets.size(); i++)
+        for (size_t i = 0; i < Readsockets.size(); i++)
         {
             if (Readfds)
             {
@@ -242,7 +310,7 @@ namespace Winsock
             }
         }
 
-        for (int i = 0; i < Writesockets.size(); i++)
+        for (size_t i = 0; i < Writesockets.size(); i++)
         {
             if (Writefds)
             {
@@ -275,7 +343,7 @@ namespace Winsock
         }
 
         // Debug information.
-        DebugPrint(va("Sending %i bytes to server %s", Length, Server ? Findaddress(Socket).c_str() : va("external (socket %X)", Socket).c_str()).c_str());
+        Debugprint(va("Sending %i bytes to server %s", Length, Server ? Findaddress(Socket).c_str() : va("external (socket %X)", Socket).c_str()));
         return Length;
     }
     int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, const struct sockaddr *To, int Tolength)
@@ -284,11 +352,12 @@ namespace Winsock
         if (!Server) Server = Findserver(Plainaddress(To));
         if (!Server) Server = Createserver(Socket, Plainaddress(To));
         if (!Server) CALLWS(sendto, &Length, Socket, Buffer, Length, Flags, To, Tolength);
+        if (Server) Datagramservers[Server] = true;
 
         if (Server)
         {
             // Create the hostinfo for recvfrom.
-            Hostinfo[Socket] = { (char *)To, size_t(Tolength) };
+            Hostinfo[Server] = { (char *)To, size_t(Tolength) };
 
             if (Server->Capabilities() & ISERVER_EXTENDED)
             {
@@ -305,10 +374,9 @@ namespace Winsock
         }
 
         // Debug information.
-        DebugPrint(va("Sending %i bytes to server %s:%u", Length, !Server ? Plainaddress(To).c_str() : "Internal", To->sa_family == AF_INET6 ? ntohs(((sockaddr_in6 *)To)->sin6_port) : ntohs(((sockaddr_in *)To)->sin_port)).c_str());
+        Debugprint(va("Sending %i bytes to server %s:%u", Length, !Server ? Plainaddress(To).c_str() : "Internal", To->sa_family == AF_INET6 ? ntohs(((sockaddr_in6 *)To)->sin6_port) : ntohs(((sockaddr_in *)To)->sin_port)));
         return Length;
     }
-
     hostent *__stdcall Gethostbyname(const char *Hostname)
     {
         IServer *Server = Createserver(Hostname);
@@ -317,7 +385,7 @@ namespace Winsock
             static hostent *Resolvedhost;
             CALLWS(gethostbyname, &Resolvedhost, Hostname);
 
-            DebugPrint(va("%s: \"%s\" -> %s", __func__, Hostname, Resolvedhost ? inet_ntoa(*(in_addr*)Resolvedhost->h_addr_list[0]) : "Could not resolve").c_str());
+            Debugprint(va("%s: \"%s\" -> %s", __func__, Hostname, Resolvedhost ? inet_ntoa(*(in_addr*)Resolvedhost->h_addr_list[0]) : "Could not resolve"));
             return Resolvedhost;
         }
 
@@ -339,7 +407,7 @@ namespace Winsock
         Localhost->h_name = const_cast<char *>(Hostname);
         Localhost->h_addr_list = (char **)LocalsocketAddresslist;
 
-        DebugPrint(va("%s: \"%s\" -> %s", __func__, Hostname, inet_ntoa(*(in_addr*)Localhost->h_addr_list[0])).c_str());
+        Debugprint(va("%s: \"%s\" -> %s", __func__, Hostname, inet_ntoa(*(in_addr*)Localhost->h_addr_list[0])));
         return Localhost;
     }
     int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
@@ -369,7 +437,7 @@ namespace Winsock
             }
         }
 
-        DebugPrint(va("%s: \"%s\" -> %s", __func__, Nodename, inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)).c_str());
+        Debugprint(va("%s: \"%s\" -> %s", __func__, Nodename, inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)));
         return WSResult;
     }
     int __stdcall Getpeername(size_t Socket, struct sockaddr *Name, int *Namelength)
@@ -411,12 +479,14 @@ namespace Winsock
 
         return Result;
     }
-
     int __stdcall Closesocket(size_t Socket)
     {
         IServer *Server = Findserver(Socket);
         CALLWS_NORET(closesocket, Socket);
         Disconnectserver(Socket);
+
+        if (Server) Datagramservers[Server] = false;
+        Anyserver[Socket] = false;
 
         if (Server && Server->Capabilities() & ISERVER_EXTENDED)
         {
@@ -439,25 +509,32 @@ namespace Winsock
         return 0;
     }
 
-    // TODO(Convery): Implement all WS functions.
-}
+    /*
+        TODO(Convery):
+        Implement more shims as needed.
+        The async ones can be interesting.
+        Remember to add new ones to the installer!
+    */
+    #pragma endregion
 
-// Initialize winsock hooks on startup.
-namespace Winsock
-{
-    struct WSLoader
+    #pragma region Installer
+    struct WSInstaller
     {
-        WSLoader()
+        WSInstaller()
         {
-            #define INSTALL_HOOK(_Function, _Replacement) {                                                                                 \
-            auto Address = (void *)GetProcAddress(GetModuleHandleA("wsock32.dll"), _Function);                                              \
-            if(!Address) Address = (void *)GetProcAddress(GetModuleHandleA("WS2_32.dll"), _Function);                                       \
-            if(Address) {                                                                                                                   \
-            Winsock::WSHooks[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                           \
-            ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks[#_Replacement])->Installhook(Address, (void *)&_Replacement); \
-            }}
+            // Helper-macro to save the developers fingers.
+            #define INSTALL_HOOK(_Function, _Replacement) {                                                                                     \
+            auto Address = (void *)GetProcAddress(GetModuleHandleA("wsock32.dll"), _Function);                                                  \
+            if(Address) {                                                                                                                       \
+            Winsock::WSHooks1[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
+            ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks1[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
+            Address = (void *)GetProcAddress(GetModuleHandleA("WS2_32.dll"), _Function);                                                        \
+            if(Address) {                                                                                                                       \
+            Winsock::WSHooks2[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
+            ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
+            }                                                                                                                                   \
 
-            // Winsock hooks.
+            // Place the hooks directly in winsock.
             INSTALL_HOOK("bind", Bind);
             INSTALL_HOOK("connect", Connect);
             INSTALL_HOOK("ioctlsocket", IOControlsocket);
@@ -472,10 +549,15 @@ namespace Winsock
             INSTALL_HOOK("getsockname", Getsockname);
             INSTALL_HOOK("closesocket", Closesocket);
             INSTALL_HOOK("shutdown", Shutdown);
-
-            // TODO(Convery): Hook all WS functions.
         }
     };
-    WSLoader Loader{};
+
+    // Install the hooks on startup.
+    static WSInstaller Installer{};
+    #pragma endregion
 }
+
+#undef INSTALL_HOOK
+#undef CALLWS_NORET
+#undef CALLWS
 #endif

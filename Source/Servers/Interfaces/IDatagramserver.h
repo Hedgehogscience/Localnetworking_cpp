@@ -1,7 +1,8 @@
 /*
-    Initial author: Convery
-    Started: 2017-4-13
-    License: Apache 2.0
+    Initial author: Convery (tcn@ayria.se)
+    Started: 24-08-2017
+    License: MIT
+    Notes:
 */
 
 #pragma once
@@ -84,4 +85,3 @@ struct IDatagramserver : IServer
         return Send({ reinterpret_cast<const char *>(Databuffer), Datasize });
     }
 };
-
