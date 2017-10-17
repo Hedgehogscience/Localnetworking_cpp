@@ -174,10 +174,6 @@
     <ClInclude Include="Source\Configuration\Defines.h" />
     <ClInclude Include="Source\Configuration\Macros.h" />
     <ClInclude Include="Source\Configuration\Warnings.h" />
-    <ClInclude Include="Source\Servers\Interfaces\IDatagramserver.h" />
-    <ClInclude Include="Source\Servers\Interfaces\IServer.h" />
-    <ClInclude Include="Source\Servers\Interfaces\IStreamserver.h" />
-    <ClInclude Include="Source\Servers\Servers.h" />
     <ClInclude Include="Source\Stdinclude.h" />
     <ClInclude Include="Source\Utility\Binary\Hooking.h" />
     <ClInclude Include="Source\Utility\Binary\Memprotect.h" />
@@ -191,12 +187,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Appmain.cpp" />
-    <ClCompile Include="Source\Platforms\Winsock.cpp" />
-    <ClCompile Include="Source\Servers\Servermanager.cpp" />
     <ClCompile Include="Source\Utility\Binary\Hooking.cpp" />
     <ClCompile Include="Source\Utility\Binary\Memprotect.cpp" />
     <ClCompile Include="Source\Utility\Binary\Patternscan.cpp" />
     <ClCompile Include="Source\Utility\Data\Bytebuffer.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Localnetworking_cpp.licenseheader" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
