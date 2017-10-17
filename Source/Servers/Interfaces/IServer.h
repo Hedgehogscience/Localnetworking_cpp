@@ -3,7 +3,7 @@
     Started: 17-10-2017
     License: MIT
     Notes:
-        The base servertype, handles IO per socket.
+        The base servertype, doesn't handle IO directly.
 */
 
 #pragma once
