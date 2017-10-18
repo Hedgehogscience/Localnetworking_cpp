@@ -193,6 +193,7 @@
     <ClInclude Include="Source\Localnetworking\Interfaces\IDatagramserver.h" />
     <ClInclude Include="Source\Localnetworking\Interfaces\IServer.h" />
     <ClInclude Include="Source\Localnetworking\Interfaces\IStreamserver.h" />
+    <ClInclude Include="Source\Localnetworking\Localnetworking.h" />
     <ClInclude Include="Source\Stdinclude.h" />
     <ClInclude Include="Source\Utility\Binary\Hooking.h" />
     <ClInclude Include="Source\Utility\Binary\Memprotect.h" />
@@ -206,6 +207,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Appmain.cpp" />
+    <ClCompile Include="Source\Localnetworking\Servermanager.cpp" />
     <ClCompile Include="Source\Utility\Binary\Hooking.cpp" />
     <ClCompile Include="Source\Utility\Binary\Memprotect.cpp" />
     <ClCompile Include="Source\Utility\Binary\Patternscan.cpp" />
