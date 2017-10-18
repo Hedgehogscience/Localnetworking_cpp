@@ -32,14 +32,14 @@ struct IDatagramserver : IServer
     {
         return Send({ reinterpret_cast<const char *>(Databuffer), Datasize });
     }
-    virtual void onData(const Localsocket_t &Socket, const std::string &Data) = 0;
+    virtual void onData(const Requestheader_t &Header, const std::string &Data) = 0;
 
     // Socket state update-notifications, nullsubbed.
-    virtual void onConnect(const Localsocket_t &Socket) { (void)Socket; };
-    virtual void onDisconnect(const Localsocket_t &Socket) { (void)Socket; };
+    virtual void onConnect(const Requestheader_t &Header) { (void)Header; };
+    virtual void onDisconnect(const Requestheader_t &Header) { (void)Header; };
 
     // Returns false if the request could not be completed for any reason.
-    virtual bool onReadrequest(const Localsocket_t &Socket, void *Databuffer, uint32_t *Datasize)
+    virtual bool onReadrequest(const Requestheader_t &Header, void *Databuffer, uint32_t *Datasize)
     {
         // If there's no packets, return instantly.
         if (Packetqueue.empty()) return false;
@@ -66,7 +66,7 @@ struct IDatagramserver : IServer
 
         return true;
     }
-    virtual bool onWriterequest(const Localsocket_t &Socket, const void *Databuffer, const uint32_t Datasize)
+    virtual bool onWriterequest(const Requestheader_t &Header, const void *Databuffer, const uint32_t Datasize)
     {
         // Pass the packet to the usercode callback.
         Threadguard.lock();
@@ -74,7 +74,7 @@ struct IDatagramserver : IServer
             // Create a new string and let the compiler optimize it out.
             auto Pointer = reinterpret_cast<const char *>(Databuffer);
             auto Packet = std::string(Pointer, Datasize);
-            onData(Socket, Packet);
+            onData(Header, Packet);
 
             // Ensure that the mutex is locked as usercode is unpredictable.
             Threadguard.try_lock();

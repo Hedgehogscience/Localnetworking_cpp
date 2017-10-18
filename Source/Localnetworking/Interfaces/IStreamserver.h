@@ -22,67 +22,66 @@ struct IStreamserver : IServer
     std::mutex Threadguard;
 
     // Usercode interaction.
-    virtual void Send(const size_t Socket, const void *Databuffer, const uint32_t Datasize)
+    virtual void Send(const size_t Header, const void *Databuffer, const uint32_t Datasize)
     {
-        auto Lambda = [&](const size_t lSocket) -> void
+        auto Lambda = [&](const size_t lHeader) -> void
         {
             // Enqueue the data at the end of the stream.
             Threadguard.lock();
             {
                 auto Pointer = reinterpret_cast<const uint8_t *>(Databuffer);
-                std::copy_n(Pointer, Datasize, std::back_inserter(Outgoingstream[lSocket]));
+                std::copy_n(Pointer, Datasize, std::back_inserter(Outgoingstream[lHeader]));
             }
             Threadguard.unlock();
         };
 
         // If there is a socket, just enqueue to its stream.
-        if (0 != Socket) return Lambda(Socket);
+        if (0 != Header) return Lambda(Header);
 
         // Else we treat it as a broadcast request.
         for (auto &Item : Validconnection)
             if (Item.second == true)
                 Lambda(Item.first);
     }
-    virtual void Send(const size_t Socket, std::string Databuffer)
+    virtual void Send(const size_t Header, std::string Databuffer)
     {
-        return Send(Socket, Databuffer.data(), uint32_t(Databuffer.size()));
+        return Send(Header, Databuffer.data(), uint32_t(Databuffer.size()));
     }
-    virtual void onData(const Localsocket_t &Socket, std::vector<uint8_t> &Data) = 0;
+    virtual void onData(const Requestheader_t &Header, std::vector<uint8_t> &Data) = 0;
 
-    // Socket state update-notifications.
-    virtual void onConnect(const Localsocket_t &Socket)
+    // Header state update-notifications.
+    virtual void onConnect(const Requestheader_t &Header)
     {
         Threadguard.lock();
         {
             // Clear the streams to be ready for new data.
-            Incomingstream[Socket.Berkeley].clear();
-            Outgoingstream[Socket.Berkeley].clear();
+            Incomingstream[Header.Socket].clear();
+            Outgoingstream[Header.Socket].clear();
 
             // Set the connection-state.
-            Validconnection[Socket.Berkeley] = true;
+            Validconnection[Header.Socket] = true;
         }
         Threadguard.unlock();
     }
-    virtual void onDisconnect(const Localsocket_t &Socket)
+    virtual void onDisconnect(const Requestheader_t &Header)
     {
         Threadguard.lock();
         {
             // Clear the incoming stream, but keep the outgoing.
-            Incomingstream[Socket.Berkeley].clear();
-            Incomingstream[Socket.Berkeley].shrink_to_fit();
+            Incomingstream[Header.Socket].clear();
+            Incomingstream[Header.Socket].shrink_to_fit();
 
             // Set the connection-state.
-            Validconnection[Socket.Berkeley] = false;
+            Validconnection[Header.Socket] = false;
         }
         Threadguard.unlock();
     }
 
     // Returns false if the request could not be completed for any reason.
-    virtual bool onReadrequest(const Localsocket_t &Socket, void *Databuffer, uint32_t *Datasize)
+    virtual bool onReadrequest(const Requestheader_t &Header, void *Databuffer, uint32_t *Datasize)
     {
-        // To support lingering sockets, we transmit data even if the socket is technically disconnected.
-        if (0 == Outgoingstream[Socket.Berkeley].size() && Validconnection[Socket.Berkeley]) return false;
-        if (0 != Outgoingstream[Socket.Berkeley].size() && !Validconnection[Socket.Berkeley]) return false;
+        // To support lingering sockets, we transmit data even if the socket is disconnected.
+        if (0 == Outgoingstream[Header.Socket].size()) return false;
 
         // Verify the pointers, although they should always be valid.
         if (!Databuffer || !Datasize) return false;
@@ -91,27 +90,27 @@ struct IStreamserver : IServer
         Threadguard.lock();
         {
             // Validate the state, unlikely to change.
-            if (0 != Outgoingstream[Socket.Berkeley].size())
+            if (0 != Outgoingstream[Header.Socket].size())
             {
                 // Copy as much data as we can fit in the buffer.
-                *Datasize = std::min(*Datasize, uint32_t(Outgoingstream[Socket.Berkeley].size()));
-                std::copy_n(Outgoingstream[Socket.Berkeley].begin(), *Datasize, reinterpret_cast<char *>(Databuffer));
-                Outgoingstream[Socket.Berkeley].erase(Outgoingstream[Socket.Berkeley].begin(), Outgoingstream[Socket.Berkeley].begin() + *Datasize);
+                *Datasize = std::min(*Datasize, uint32_t(Outgoingstream[Header.Socket].size()));
+                std::copy_n(Outgoingstream[Header.Socket].begin(), *Datasize, reinterpret_cast<char *>(Databuffer));
+                Outgoingstream[Header.Socket].erase(Outgoingstream[Header.Socket].begin(), Outgoingstream[Header.Socket].begin() + *Datasize);
             }
         }
         Threadguard.unlock();
     }
-    virtual bool onWriterequest(const Localsocket_t &Socket, const void *Databuffer, const uint32_t Datasize)
+    virtual bool onWriterequest(const Requestheader_t &Header, const void *Databuffer, const uint32_t Datasize)
     {
         // If there is no valid connection, we just ignore the data.
-        if (Validconnection[Socket.Berkeley] == false) return false;
+        if (Validconnection[Header.Socket] == false) return false;
 
         // Append the data to the stream and notify usercode.
         Threadguard.lock();
         {
             auto Pointer = reinterpret_cast<const uint8_t *>(Databuffer);
-            std::copy_n(Pointer, Datasize, std::back_inserter(Incomingstream[Socket.Berkeley]));
-            onData(Socket, Incomingstream[Socket.Berkeley]);
+            std::copy_n(Pointer, Datasize, std::back_inserter(Incomingstream[Header.Socket]));
+            onData(Header, Incomingstream[Header.Socket]);
 
             // Ensure that the mutex is locked as usercode is unpredictable.
             Threadguard.try_lock();

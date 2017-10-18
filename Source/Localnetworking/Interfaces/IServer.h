@@ -16,10 +16,10 @@ struct IPAddress_t
     char Plainaddress[65];
 };
 
-// Abstraction of the socket-state.
-struct Localsocket_t
+// Information about the socket-state.
+struct Requestheader_t
 {
-    size_t Berkeley;
+    size_t Socket;
     IPAddress_t Client;
     IPAddress_t Server;
 };
@@ -28,10 +28,10 @@ struct Localsocket_t
 struct IServer
 {
     // Socket state update-notifications.
-    virtual void onConnect(const Localsocket_t &Socket) = 0;
-    virtual void onDisconnect(const Localsocket_t &Socket) = 0;
+    virtual void onConnect(const Requestheader_t &Header) = 0;
+    virtual void onDisconnect(const Requestheader_t &Header) = 0;
 
     // Returns false if the request could not be completed for any reason.
-    virtual bool onReadrequest(const Localsocket_t &Socket, void *Databuffer, uint32_t *Datasize) = 0;
-    virtual bool onWriterequest(const Localsocket_t &Socket, const void *Databuffer, const uint32_t Datasize) = 0;
+    virtual bool onReadrequest(const Requestheader_t &Header, void *Databuffer, uint32_t *Datasize) = 0;
+    virtual bool onWriterequest(const Requestheader_t &Header, const void *Databuffer, const uint32_t Datasize) = 0;
 };
