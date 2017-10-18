@@ -9,24 +9,20 @@
 #pragma once
 #include <cstdint>
 
-// Core datatypes for client-server IO.
-#pragma pack(1)
+// Universal representation of an address.
 struct IPAddress
 {
     uint16_t Port;
-    uint16_t Addresslength;
-    union
-    {
-        uint8_t IPv4[4];
-        uint8_t IPv6[16];
-    };
+    char Plainaddress[65];
 };
+
+// Abstraction of the socket-state.
 struct Localsocket
 {
     size_t Berkeley;
-    IPAddress Hostname;
+    IPAddress Client;
+    IPAddress Server;
 };
-#pragma pack()
 
 // The base servertype that all others will derive from.
 struct IServer

@@ -190,9 +190,9 @@
     <ClInclude Include="Source\Configuration\Defines.h" />
     <ClInclude Include="Source\Configuration\Macros.h" />
     <ClInclude Include="Source\Configuration\Warnings.h" />
-    <ClInclude Include="Source\Servers\Interfaces\IDatagramserver.h" />
-    <ClInclude Include="Source\Servers\Interfaces\IServer.h" />
-    <ClInclude Include="Source\Servers\Interfaces\IStreamserver.h" />
+    <ClInclude Include="Source\Localnetworking\Interfaces\IDatagramserver.h" />
+    <ClInclude Include="Source\Localnetworking\Interfaces\IServer.h" />
+    <ClInclude Include="Source\Localnetworking\Interfaces\IStreamserver.h" />
     <ClInclude Include="Source\Stdinclude.h" />
     <ClInclude Include="Source\Utility\Binary\Hooking.h" />
     <ClInclude Include="Source\Utility\Binary\Memprotect.h" />
