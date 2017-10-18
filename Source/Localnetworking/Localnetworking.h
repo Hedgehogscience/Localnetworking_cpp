@@ -14,4 +14,27 @@ namespace Localnetworking
 {
     // Create a new server-instance.
     IServer *Createinstance(std::string Hostname);
+
+    // Layered networking.
+    namespace Layer3
+    {
+        struct Frame_t
+        {
+            IPAddress_t To;
+            IPAddress_t From;
+            std::string Databuffer;
+        };
+
+        // Set endpoints for the networking.
+        void Addendpoint(size_t Identifier);
+        void Removeendpoint(size_t Identifier);
+
+        // Set filters for the endpoints.
+        void Addfilter(size_t Identifier, IPAddress_t Filter);
+        void Removefilter(size_t Identifier, IPAddress_t Filter);
+
+        // Perform IO the network.
+        void Appendframe(Frame_t &Frame);
+        bool Removeframe(Frame_t &Frame);
+    }
 }

@@ -207,6 +207,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Appmain.cpp" />
+    <ClCompile Include="Source\Localnetworking\Networklayer3.cpp" />
     <ClCompile Include="Source\Localnetworking\Servermanager.cpp" />
     <ClCompile Include="Source\Utility\Binary\Hooking.cpp" />
     <ClCompile Include="Source\Utility\Binary\Memprotect.cpp" />

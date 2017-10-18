@@ -22,6 +22,7 @@
 #include <chrono>
 #include <mutex>
 #include <ctime>
+#include <queue>
 
 // Includes for platform libraries.
 #if defined (_WIN32)
