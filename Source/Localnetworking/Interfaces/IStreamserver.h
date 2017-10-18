@@ -22,30 +22,30 @@ struct IStreamserver : IServer
     std::mutex Threadguard;
 
     // Usercode interaction.
-    virtual void Send(const size_t Header, const void *Databuffer, const uint32_t Datasize)
+    virtual void Send(const size_t Socket, const void *Databuffer, const uint32_t Datasize)
     {
-        auto Lambda = [&](const size_t lHeader) -> void
+        auto Lambda = [&](const size_t lSocket) -> void
         {
             // Enqueue the data at the end of the stream.
             Threadguard.lock();
             {
                 auto Pointer = reinterpret_cast<const uint8_t *>(Databuffer);
-                std::copy_n(Pointer, Datasize, std::back_inserter(Outgoingstream[lHeader]));
+                std::copy_n(Pointer, Datasize, std::back_inserter(Outgoingstream[lSocket]));
             }
             Threadguard.unlock();
         };
 
         // If there is a socket, just enqueue to its stream.
-        if (0 != Header) return Lambda(Header);
+        if (0 != Socket) return Lambda(Socket);
 
         // Else we treat it as a broadcast request.
         for (auto &Item : Validconnection)
             if (Item.second == true)
                 Lambda(Item.first);
     }
-    virtual void Send(const size_t Header, std::string Databuffer)
+    virtual void Send(const size_t Socket, std::string Databuffer)
     {
-        return Send(Header, Databuffer.data(), uint32_t(Databuffer.size()));
+        return Send(Socket, Databuffer.data(), uint32_t(Databuffer.size()));
     }
     virtual void onData(const Requestheader_t &Header, std::vector<uint8_t> &Data) = 0;
 
