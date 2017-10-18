@@ -32,14 +32,14 @@ struct IDatagramserver : IServer
     {
         return Send({ reinterpret_cast<const char *>(Databuffer), Datasize });
     }
-    virtual void onData(const Localsocket &Socket, const std::string &Data) = 0;
+    virtual void onData(const Localsocket_t &Socket, const std::string &Data) = 0;
 
     // Socket state update-notifications, nullsubbed.
-    virtual void onConnect(const Localsocket &Socket) { (void)Socket; };
-    virtual void onDisconnect(const Localsocket &Socket) { (void)Socket; };
+    virtual void onConnect(const Localsocket_t &Socket) { (void)Socket; };
+    virtual void onDisconnect(const Localsocket_t &Socket) { (void)Socket; };
 
     // Returns false if the request could not be completed for any reason.
-    virtual bool onReadrequest(const Localsocket &Socket, void *Databuffer, uint32_t *Datasize)
+    virtual bool onReadrequest(const Localsocket_t &Socket, void *Databuffer, uint32_t *Datasize)
     {
         // If there's no packets, return instantly.
         if (Packetqueue.empty()) return false;
@@ -66,7 +66,7 @@ struct IDatagramserver : IServer
 
         return true;
     }
-    virtual bool onWriterequest(const Localsocket &Socket, const void *Databuffer, const uint32_t Datasize)
+    virtual bool onWriterequest(const Localsocket_t &Socket, const void *Databuffer, const uint32_t Datasize)
     {
         // Pass the packet to the usercode callback.
         Threadguard.lock();

@@ -47,10 +47,10 @@ struct IStreamserver : IServer
     {
         return Send(Socket, Databuffer.data(), uint32_t(Databuffer.size()));
     }
-    virtual void onData(const Localsocket &Socket, std::vector<uint8_t> &Data) = 0;
+    virtual void onData(const Localsocket_t &Socket, std::vector<uint8_t> &Data) = 0;
 
     // Socket state update-notifications.
-    virtual void onConnect(const Localsocket &Socket)
+    virtual void onConnect(const Localsocket_t &Socket)
     {
         Threadguard.lock();
         {
@@ -63,7 +63,7 @@ struct IStreamserver : IServer
         }
         Threadguard.unlock();
     }
-    virtual void onDisconnect(const Localsocket &Socket)
+    virtual void onDisconnect(const Localsocket_t &Socket)
     {
         Threadguard.lock();
         {
@@ -78,7 +78,7 @@ struct IStreamserver : IServer
     }
 
     // Returns false if the request could not be completed for any reason.
-    virtual bool onReadrequest(const Localsocket &Socket, void *Databuffer, uint32_t *Datasize)
+    virtual bool onReadrequest(const Localsocket_t &Socket, void *Databuffer, uint32_t *Datasize)
     {
         // To support lingering sockets, we transmit data even if the socket is technically disconnected.
         if (0 == Outgoingstream[Socket.Berkeley].size() && Validconnection[Socket.Berkeley]) return false;
@@ -101,7 +101,7 @@ struct IStreamserver : IServer
         }
         Threadguard.unlock();
     }
-    virtual bool onWriterequest(const Localsocket &Socket, const void *Databuffer, const uint32_t Datasize)
+    virtual bool onWriterequest(const Localsocket_t &Socket, const void *Databuffer, const uint32_t Datasize)
     {
         // If there is no valid connection, we just ignore the data.
         if (Validconnection[Socket.Berkeley] == false) return false;
