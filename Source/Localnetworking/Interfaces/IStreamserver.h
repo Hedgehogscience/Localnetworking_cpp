@@ -47,41 +47,39 @@ struct IStreamserver : IServer
     {
         return Send(Socket, Databuffer.data(), uint32_t(Databuffer.size()));
     }
-    virtual void onData(const Requestheader_t &Header, std::vector<uint8_t> &Data) = 0;
+    virtual void onData(const size_t Socket, std::vector<uint8_t> &Data) = 0;
 
-    // Header state update-notifications.
-    virtual void onConnect(const Requestheader_t &Header)
-    {
-        Threadguard.lock();
-        {
-            // Clear the streams to be ready for new data.
-            Incomingstream[Header.Socket].clear();
-            Outgoingstream[Header.Socket].clear();
-
-            // Set the connection-state.
-            Validconnection[Header.Socket] = true;
-        }
-        Threadguard.unlock();
-    }
-    virtual void onDisconnect(const Requestheader_t &Header)
+    // Stream-based IO for protocols such as TCP.
+    virtual void onDisconnect(const size_t Socket)
     {
         Threadguard.lock();
         {
             // Clear the incoming stream, but keep the outgoing.
-            Incomingstream[Header.Socket].clear();
-            Incomingstream[Header.Socket].shrink_to_fit();
+            Incomingstream[Socket].clear();
+            Incomingstream[Socket].shrink_to_fit();
 
             // Set the connection-state.
-            Validconnection[Header.Socket] = false;
+            Validconnection[Socket] = false;
         }
         Threadguard.unlock();
     }
+    virtual void onConnect(const size_t Socket, const uint16_t Port)
+    {
+        Threadguard.lock();
+        {
+            // Clear the streams to be ready for new data.
+            Incomingstream[Socket].clear();
+            Outgoingstream[Socket].clear();
 
-    // Returns false if the request could not be completed for any reason.
-    virtual bool onReadrequest(const Requestheader_t &Header, void *Databuffer, uint32_t *Datasize)
+            // Set the connection-state.
+            Validconnection[Socket] = true;
+        }
+        Threadguard.unlock();
+    }
+    virtual bool onStreamread(const size_t Socket, void *Databuffer, uint32_t *Datasize)
     {
         // To support lingering sockets, we transmit data even if the socket is disconnected.
-        if (0 == Outgoingstream[Header.Socket].size()) return false;
+        if (0 == Outgoingstream[Socket].size()) return false;
 
         // Verify the pointers, although they should always be valid.
         if (!Databuffer || !Datasize) return false;
@@ -90,27 +88,27 @@ struct IStreamserver : IServer
         Threadguard.lock();
         {
             // Validate the state, unlikely to change.
-            if (0 != Outgoingstream[Header.Socket].size())
+            if (0 != Outgoingstream[Socket].size())
             {
                 // Copy as much data as we can fit in the buffer.
-                *Datasize = std::min(*Datasize, uint32_t(Outgoingstream[Header.Socket].size()));
-                std::copy_n(Outgoingstream[Header.Socket].begin(), *Datasize, reinterpret_cast<char *>(Databuffer));
-                Outgoingstream[Header.Socket].erase(Outgoingstream[Header.Socket].begin(), Outgoingstream[Header.Socket].begin() + *Datasize);
+                *Datasize = std::min(*Datasize, uint32_t(Outgoingstream[Socket].size()));
+                std::copy_n(Outgoingstream[Socket].begin(), *Datasize, reinterpret_cast<char *>(Databuffer));
+                Outgoingstream[Socket].erase(Outgoingstream[Socket].begin(), Outgoingstream[Socket].begin() + *Datasize);
             }
         }
         Threadguard.unlock();
     }
-    virtual bool onWriterequest(const Requestheader_t &Header, const void *Databuffer, const uint32_t Datasize)
+    virtual bool onStreamwrite(const size_t Socket, const void *Databuffer, const uint32_t Datasize)
     {
         // If there is no valid connection, we just ignore the data.
-        if (Validconnection[Header.Socket] == false) return false;
+        if (Validconnection[Socket] == false) return false;
 
         // Append the data to the stream and notify usercode.
         Threadguard.lock();
         {
             auto Pointer = reinterpret_cast<const uint8_t *>(Databuffer);
-            std::copy_n(Pointer, Datasize, std::back_inserter(Incomingstream[Header.Socket]));
-            onData(Header, Incomingstream[Header.Socket]);
+            std::copy_n(Pointer, Datasize, std::back_inserter(Incomingstream[Socket]));
+            onData(Socket, Incomingstream[Socket]);
 
             // Ensure that the mutex is locked as usercode is unpredictable.
             Threadguard.try_lock();
@@ -118,5 +116,19 @@ struct IStreamserver : IServer
         Threadguard.unlock();
 
         return true;
+    }
+
+    // Nullsub the unused callbacks.
+    virtual bool onPacketread(const IPAddress_t &Client, void *Databuffer, uint32_t *Datasize)
+    {
+        (void)Client;
+        (void)Datasize;
+        (void)Databuffer;
+    }
+    virtual bool onPacketwrite(const IPAddress_t &Server, const void *Databuffer, const uint32_t Datasize)
+    {
+        (void)Server;
+        (void)Datasize;
+        (void)Databuffer;
     }
 };

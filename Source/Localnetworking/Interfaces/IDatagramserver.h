@@ -32,14 +32,10 @@ struct IDatagramserver : IServer
     {
         return Send({ reinterpret_cast<const char *>(Databuffer), Datasize });
     }
-    virtual void onData(const Requestheader_t &Header, const std::string &Data) = 0;
-
-    // Socket state update-notifications, nullsubbed.
-    virtual void onConnect(const Requestheader_t &Header) { (void)Header; };
-    virtual void onDisconnect(const Requestheader_t &Header) { (void)Header; };
+    virtual void onData(const IPAddress_t &Server, const std::string &Data) = 0;
 
     // Returns false if the request could not be completed for any reason.
-    virtual bool onReadrequest(const Requestheader_t &Header, void *Databuffer, uint32_t *Datasize)
+    virtual bool onPacketread(const IPAddress_t &Client, void *Databuffer, uint32_t *Datasize)
     {
         // If there's no packets, return instantly.
         if (Packetqueue.empty()) return false;
@@ -66,7 +62,7 @@ struct IDatagramserver : IServer
 
         return true;
     }
-    virtual bool onWriterequest(const Requestheader_t &Header, const void *Databuffer, const uint32_t Datasize)
+    virtual bool onPacketwrite(const IPAddress_t &Server, const void *Databuffer, const uint32_t Datasize)
     {
         // Pass the packet to the usercode callback.
         Threadguard.lock();
@@ -74,7 +70,7 @@ struct IDatagramserver : IServer
             // Create a new string and let the compiler optimize it out.
             auto Pointer = reinterpret_cast<const char *>(Databuffer);
             auto Packet = std::string(Pointer, Datasize);
-            onData(Header, Packet);
+            onData(Server, Packet);
 
             // Ensure that the mutex is locked as usercode is unpredictable.
             Threadguard.try_lock();
@@ -82,5 +78,28 @@ struct IDatagramserver : IServer
         Threadguard.unlock();
 
         return true;
+    }
+
+    // Nullsub the unused callbacks.
+    virtual void onDisconnect(const size_t Socket)
+    {
+        (void)Socket;
+    }
+    virtual void onConnect(const size_t Socket, const uint16_t Port)
+    {
+        (void)Port;
+        (void)Socket;
+    }
+    virtual bool onStreamread(const size_t Socket, void *Databuffer, uint32_t *Datasize)
+    {
+        (void)Socket;
+        (void)Datasize;
+        (void)Databuffer;
+    }
+    virtual bool onStreamwrite(const size_t Socket, const void *Databuffer, const uint32_t Datasize)
+    {
+        (void)Socket;
+        (void)Datasize;
+        (void)Databuffer;
     }
 };

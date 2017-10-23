@@ -3,7 +3,7 @@
     Started: 17-10-2017
     License: MIT
     Notes:
-        The base servertype, doesn't handle IO directly.
+        A base type for polymorphism.
 */
 
 #pragma once
@@ -16,22 +16,17 @@ struct IPAddress_t
     char Plainaddress[65];
 };
 
-// Information about the socket-state.
-struct Requestheader_t
-{
-    size_t Socket;
-    IPAddress_t Client;
-    IPAddress_t Server;
-};
-
 // The base servertype that all others will derive from.
+// Callbacks return false if there's an error, such as there being no data.
 struct IServer
 {
-    // Socket state update-notifications.
-    virtual void onConnect(const Requestheader_t &Header) = 0;
-    virtual void onDisconnect(const Requestheader_t &Header) = 0;
+    // Packet-based IO for protocols such as UDP and ICMP.
+    virtual bool onPacketread(const IPAddress_t &Client, void *Databuffer, uint32_t *Datasize) = 0;
+    virtual bool onPacketwrite(const IPAddress_t &Server, const void *Databuffer, const uint32_t Datasize) = 0;
 
-    // Returns false if the request could not be completed for any reason.
-    virtual bool onReadrequest(const Requestheader_t &Header, void *Databuffer, uint32_t *Datasize) = 0;
-    virtual bool onWriterequest(const Requestheader_t &Header, const void *Databuffer, const uint32_t Datasize) = 0;
+    // Stream-based IO for protocols such as TCP.
+    virtual void onDisconnect(const size_t Socket) = 0;
+    virtual void onConnect(const size_t Socket, const uint16_t Port) = 0;
+    virtual bool onStreamread(const size_t Socket, void *Databuffer, uint32_t *Datasize) = 0;
+    virtual bool onStreamwrite(const size_t Socket, const void *Databuffer, const uint32_t Datasize) = 0;
 };
