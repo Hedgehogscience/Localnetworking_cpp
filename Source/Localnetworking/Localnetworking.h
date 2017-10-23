@@ -9,32 +9,19 @@
 #pragma once
 #include "../Stdinclude.h"
 #include "Interfaces/IServer.h"
+#include "Interfaces/IStreamserver.h"
+#include "Interfaces/IDatagramserver.h"
 
 namespace Localnetworking
 {
-    // Create a new server-instance.
-    IServer *Createinstance(std::string Hostname);
+    // Create a new server instance.
+    IServer *Createserver(std::string Hostname);
 
-    // Layered networking.
-    namespace Layer3
-    {
-        struct Frame_t
-        {
-            IPAddress_t To;
-            IPAddress_t From;
-            std::string Databuffer;
-        };
+    // Modify a servers properties.
+    void Addfilter(IServer *Server, IPAddress_t Filter);
+    void Associatesocket(IServer *Server, size_t Socket);
 
-        // Set endpoints for the networking.
-        void Addendpoint(size_t Identifier);
-        void Removeendpoint(size_t Identifier);
-
-        // Set filters for the endpoints.
-        void Addfilter(size_t Identifier, IPAddress_t Filter);
-        void Removefilter(size_t Identifier, IPAddress_t Filter);
-
-        // Perform IO the network.
-        void Appendframe(Frame_t &Frame);
-        bool Removeframe(Frame_t &Frame);
-    }
+    // Query the servermaps.
+    IServer *Findserver(size_t Socket);
+    IServer *Findserver(std::string Hostname);
 }

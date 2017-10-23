@@ -11,6 +11,9 @@
 namespace Localnetworking
 {
     std::unordered_map<std::string /* Hostname */, void * /* Module */> Modulecache;
+    std::unordered_map<std::string /* Hostname */, IServer *> Serverinstances;
+    std::unordered_map<size_t /* Socket */, IServer *> Connectedsockets;
+    std::unordered_map<IServer *, std::vector<IPAddress_t>> Filters;
     std::vector<std::string /* Hostname */> Blacklist;
     std::vector<void * /* Module */> Networkmodules;
 
@@ -18,8 +21,8 @@ namespace Localnetworking
     void *Findfunction(void *Module, const char *Function);
     void *Loadmodule(const char *Path);
 
-    // Create a new server-instance.
-    IServer *Createinstance(std::string Hostname)
+    // Create a new server instance.
+    IServer *Createserver(std::string Hostname)
     {
         // Don't waste time on blacklisted hostnames.
         if (Blacklist.end() != std::find(Blacklist.begin(), Blacklist.end(), Hostname))
@@ -58,6 +61,35 @@ namespace Localnetworking
         return nullptr;
     }
 
+    // Modify a servers properties.
+    void Addfilter(IServer *Server, IPAddress_t Filter)
+    {
+        auto Entry = &Filters[Server];
+        Entry->push_back(Filter);
+    }
+    void Associatesocket(IServer *Server, size_t Socket)
+    {
+        Connectedsockets[Socket] = Server;
+    }
+
+    // Query the servermaps.
+    IServer *Findserver(size_t Socket)
+    {
+        auto Entry = Connectedsockets.find(Socket);
+        if(Entry != Connectedsockets.end())
+            return Entry->second;
+        else
+            return nullptr;
+    }
+    IServer *Findserver(std::string Hostname)
+    {
+        auto Entry = Serverinstances.find(Hostname);
+        if(Entry != Serverinstances.end())
+            return Entry->second;
+        else
+            return nullptr;
+    }
+
     // The platform specific functionality.
     #if defined (_WIN32)
     void *Findfunction(void *Module, const char *Function)
@@ -78,6 +110,5 @@ namespace Localnetworking
     {
         return (void *)dlopen(Path, RTLD_LAZY);
     }
-
     #endif
 }
