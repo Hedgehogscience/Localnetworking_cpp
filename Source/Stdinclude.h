@@ -12,6 +12,8 @@
 #include "Configuration/Macros.h"
 
 // Includes for standard libraries.
+#include <unordered_map>
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstdarg>
@@ -38,6 +40,7 @@
 #include <sys/mman.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <dlfcn.h>
 #endif
 
 // Includes for thirdparty libraries.
