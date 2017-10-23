@@ -8,6 +8,8 @@
 
 #include "../Stdinclude.h"
 
+#define Address Server.Plainaddress
+
 namespace Localnetworking
 {
     std::unordered_map<std::string /* Hostname */, void * /* Module */> Modulecache;
@@ -88,6 +90,29 @@ namespace Localnetworking
             return Entry->second;
         else
             return nullptr;
+    }
+    IServer *Findserver(IPAddress_t Server, size_t Offset)
+    {
+        for(auto &Collection : Filters)
+        {
+            for(auto &Item : Collection.second)
+            {
+                if(Item.Port != Server.Port) continue;
+                if(0 != std::strcmp(Item.Plainaddress, Address)
+                && 0 != std::strcmp(Item.Plainaddress, "0.0.0.0")
+                && 0 != std::strcmp(Item.Plainaddress, "::")) continue;
+
+                if(Offset)
+                {
+                    Offset--;
+                    continue;
+                }
+
+                return Collection.first;
+            }
+        }
+
+        return nullptr;
     }
 
     // The platform specific functionality.
