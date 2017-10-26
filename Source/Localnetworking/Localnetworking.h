@@ -24,5 +24,5 @@ namespace Localnetworking
     // Query the servermaps.
     IServer *Findserver(size_t Socket);
     IServer *Findserver(std::string Hostname);
-    IServer *Findserver(IPAddress_t Server, size_t Offset = 0);
+    size_t Findsocket(IPAddress_t Server, size_t Offset = 0);
 }

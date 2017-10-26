@@ -15,7 +15,7 @@ namespace Localnetworking
     std::unordered_map<std::string /* Hostname */, void * /* Module */> Modulecache;
     std::unordered_map<std::string /* Hostname */, IServer *> Serverinstances;
     std::unordered_map<size_t /* Socket */, std::vector<IPAddress_t>> Filters;
-    std::unordered_map<size_t /* Socket */, IServer *> Connectedsockets;
+    std::unordered_map<IServer *, std::vector<size_t>> Connectedsockets;
     std::vector<std::string /* Hostname */> Blacklist;
     std::vector<void * /* Module */> Networkmodules;
 
@@ -71,17 +71,22 @@ namespace Localnetworking
     }
     void Associatesocket(IServer *Server, size_t Socket)
     {
-        Connectedsockets[Socket] = Server;
+        Connectedsockets[Server].push_back(Socket);
     }
 
     // Query the servermaps.
     IServer *Findserver(size_t Socket)
     {
-        auto Entry = Connectedsockets.find(Socket);
-        if(Entry != Connectedsockets.end())
-            return Entry->second;
-        else
-            return nullptr;
+        for (auto &Server : Connectedsockets)
+        {
+            for (auto &Berkeley : Server.second)
+            {
+                if (Berkeley == Socket)
+                    return Server.first;
+            }
+        }
+
+        return nullptr;
     }
     IServer *Findserver(std::string Hostname)
     {
@@ -91,7 +96,7 @@ namespace Localnetworking
         else
             return nullptr;
     }
-    IServer *Findserver(IPAddress_t Server, size_t Offset)
+    size_t Findsocket(IPAddress_t Server, size_t Offset)
     {
         for(auto &Collection : Filters)
         {
@@ -112,7 +117,7 @@ namespace Localnetworking
             }
         }
 
-        return nullptr;
+        return 0;
     }
 
     // The platform specific functionality.
