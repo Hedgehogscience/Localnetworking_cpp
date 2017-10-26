@@ -14,8 +14,8 @@ namespace Localnetworking
 {
     std::unordered_map<std::string /* Hostname */, void * /* Module */> Modulecache;
     std::unordered_map<std::string /* Hostname */, IServer *> Serverinstances;
+    std::unordered_map<size_t /* Socket */, std::vector<IPAddress_t>> Filters;
     std::unordered_map<size_t /* Socket */, IServer *> Connectedsockets;
-    std::unordered_map<IServer *, std::vector<IPAddress_t>> Filters;
     std::vector<std::string /* Hostname */> Blacklist;
     std::vector<void * /* Module */> Networkmodules;
 
@@ -64,9 +64,9 @@ namespace Localnetworking
     }
 
     // Modify a servers properties.
-    void Addfilter(IServer *Server, IPAddress_t Filter)
+    void Addfilter(size_t Socket, IPAddress_t Filter)
     {
-        auto Entry = &Filters[Server];
+        auto Entry = &Filters[Socket];
         Entry->push_back(Filter);
     }
     void Associatesocket(IServer *Server, size_t Socket)

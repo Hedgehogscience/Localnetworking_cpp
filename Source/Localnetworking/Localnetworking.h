@@ -18,7 +18,7 @@ namespace Localnetworking
     IServer *Createserver(std::string Hostname);
 
     // Modify a servers properties.
-    void Addfilter(IServer *Server, IPAddress_t Filter);
+    void Addfilter(size_t Socket, IPAddress_t Filter);
     void Associatesocket(IServer *Server, size_t Socket);
 
     // Query the servermaps.
