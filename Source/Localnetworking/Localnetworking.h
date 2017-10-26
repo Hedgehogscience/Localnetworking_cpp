@@ -21,6 +21,7 @@ namespace Localnetworking
     void Addfilter(size_t Socket, IPAddress_t Filter);
     void Associatesocket(IServer *Server, size_t Socket);
     void Disassociatesocket(IServer *Server, size_t Socket);
+    bool isAssociated(size_t Socket);
 
     // Query the servermaps.
     IServer *Findserver(size_t Socket);

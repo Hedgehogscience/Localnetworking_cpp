@@ -143,10 +143,28 @@ namespace Winsock
         bool Successful = false;
         uint32_t Result = Length;
 
+        // Pointer checking because few professional game-developers know their shit.
+        if (!Buffer)
+        {
+            WSASetLastError(EFAULT);
+            return -1;
+        }
+
         // Find a server associated with this socket and poll.
         auto Server = Localnetworking::Findserver(Socket);
         if (Server)
         {
+            // Notify the developer that they'll have to deal with this.
+            if (Flags)
+            {
+                Infoprint(va("\n%s\n%s\n%s\%s\n%s",
+                    "##############################################################",
+                    "The current application is using special flags for Receive.",
+                    "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                    "Or just hack it into your module.",
+                    "##############################################################"));
+            }
+
             // If we are on a blocking socket, poll until successful.
             do
             {
@@ -158,11 +176,68 @@ namespace Winsock
         // Ask Windows to fetch some data from the socket if it's not ours.
         if (!Server) CALLWS(recv, &Result, Socket, Buffer, Length, Flags);
 
+        // Return the length or error.
         if (Server && !Successful) return -1;
         if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
+    int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
+    {
+        uint32_t Result;
 
+        // Pointer checking because few professional game-developers know their shit.
+        if (!Buffer || !From)
+        {
+            WSASetLastError(EFAULT);
+            return -1;
+        }
+
+        // Check if it's a socket associated with our network.
+        if (Localnetworking::isAssociated(Socket))
+        {
+            IPAddress_t Localfrom; std::string Packet;
+
+            // Check if there's any data on the socket and return that.
+            do
+            {
+                if (Localnetworking::Dequeueframe(Socket, Localfrom, Packet))
+                {
+                    // Notify the developer that they'll have to deal with this.
+                    if (Flags)
+                    {
+                        Infoprint(va("\n%s\n%s\n%s\%s\n%s",
+                            "##############################################################",
+                            "The current application is using special flags for Receivefrom.",
+                            "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                            "Or just hack it into your module.",
+                            "##############################################################"));
+                    }
+
+                    // Copy the sender information.
+                    if (From->sa_family == AF_INET6)
+                    {
+                        inet_pton(From->sa_family, Localfrom.Plainaddress, &((struct sockaddr_in6 *)From)->sin6_addr);
+                        ((struct sockaddr_in6 *)From)->sin6_port = Localfrom.Port;
+                    }
+                    else
+                    {
+                        inet_pton(From->sa_family, Localfrom.Plainaddress, &((struct sockaddr_in *)From)->sin_addr);
+                        ((struct sockaddr_in *)From)->sin_port = Localfrom.Port;
+                    }
+
+                    // Copy the data to the buffer and return how much was copied.
+                    std::memcpy(Buffer, Packet.data(), std::min(size_t(Length), Packet.size()));
+                    return std::min(size_t(Length), Packet.size());
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            } while (Blockingsockets[Socket]);
+        }
+
+        // Ask Windows to fetch some data from the socket if it's not managed by us.
+        CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
+        return std::min(Result, uint32_t(INT32_MAX));
+    }
 
 
 

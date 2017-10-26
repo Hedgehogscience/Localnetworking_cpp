@@ -91,6 +91,21 @@ namespace Localnetworking
             }
         }
     }
+    bool isAssociated(size_t Socket)
+    {
+        for (auto &Entry : Connectedsockets)
+        {
+            for (auto &Berkeley : Entry.second)
+            {
+                if (Berkeley == Socket)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     // Query the servermaps.
     IServer *Findserver(size_t Socket)
