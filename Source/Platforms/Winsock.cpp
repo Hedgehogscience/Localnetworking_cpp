@@ -45,6 +45,8 @@ namespace Winsock
     #pragma endregion
 
     #pragma region Helpers
+    std::unordered_map<size_t /* Socket */, bool> Blockingsockets;
+
     std::string Plainaddress(const struct sockaddr *Sockaddr)
     {
         auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
@@ -106,6 +108,64 @@ namespace Winsock
         Debugprint(va("%s to %s:%u", Server || 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), WSPort(Name)));
         return Server || 0 == Result ? 0 : -1;
     }
+    int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *Argument)
+    {
+        int Result = 0;
+        const char *Readable = "UNKNOWN";
+
+        // TODO(Convery): Implement more socket options here.
+        switch (Command)
+        {
+            case FIONBIO:
+            {
+                Readable = "FIONBIO";
+                Blockingsockets[Socket] = *Argument == 0;
+                break;
+            }
+            case FIONREAD: Readable = "FIONREAD"; break;
+            case FIOASYNC: Readable = "FIOASYNC"; break;
+            case SIOCSHIWAT: Readable = "SIOCSHIWAT"; break;
+            case SIOCGHIWAT: Readable = "SIOCGHIWAT"; break;
+            case SIOCSLOWAT: Readable = "SIOCSLOWAT"; break;
+            case SIOCGLOWAT: Readable = "SIOCGLOWAT"; break;
+            case SIOCATMARK: Readable = "SIOCATMARK"; break;
+        }
+
+        // Debug information.
+        Debugprint(va("Socket 0x%X modified %s", Socket, Readable));
+
+        // Call the IOControl on the actual socket.
+        CALLWS(ioctlsocket, &Result, Socket, Command, Argument);
+        return Result;
+    }
+    int __stdcall Receive(size_t Socket, char *Buffer, int Length, int Flags)
+    {
+        bool Successful = false;
+        uint32_t Result = Length;
+
+        // Find a server associated with this socket and poll.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (Server)
+        {
+            // If we are on a blocking socket, poll until successful.
+            do
+            {
+                Successful = Server->onStreamread(Socket, Buffer, &Result);
+                if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            } while (!Successful && Blockingsockets[Socket]);
+        }
+
+        // Ask Windows to fetch some data from the socket if it's not ours.
+        if (!Server) CALLWS(recv, &Result, Socket, Buffer, Length, Flags);
+
+        if (Server && !Successful) return -1;
+        if (Result == uint32_t(-1)) return -1;
+        return std::min(Result, uint32_t(INT32_MAX));
+    }
+
+
+
+
     #pragma endregion
 
     #pragma region Installer
