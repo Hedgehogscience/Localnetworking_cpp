@@ -73,6 +73,17 @@ namespace Localnetworking
     {
         Connectedsockets[Server].push_back(Socket);
     }
+    void Disassociatesocket(IServer *Server, size_t Socket)
+    {
+        for (auto &Item : Connectedsockets[Server])
+        {
+            if (Item == Socket)
+            {
+                Item = 0;
+                break;
+            }
+        }
+    }
 
     // Query the servermaps.
     IServer *Findserver(size_t Socket)

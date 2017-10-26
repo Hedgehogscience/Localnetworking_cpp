@@ -96,6 +96,7 @@ namespace Winsock
 
         // If there's no server, try to create one from the hostname.
         if (!Server) Server = Localnetworking::Createserver(Plainaddress(Name));
+        if (Server) Localnetworking::Disassociatesocket(Server, Socket);
         if (Server) Server->onConnect(Socket, WSPort(Name));
 
         // Ask Windows to connect the socket if there's no server.
