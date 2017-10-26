@@ -12,9 +12,12 @@
 
 namespace Localnetworking
 {
+    using Frame_t = struct { IPAddress_t From; std::string Data; };
+
     std::unordered_map<std::string /* Hostname */, void * /* Module */> Modulecache;
     std::unordered_map<std::string /* Hostname */, IServer *> Serverinstances;
     std::unordered_map<size_t /* Socket */, std::vector<IPAddress_t>> Filters;
+    std::unordered_map<size_t /* Socket */, std::queue<Frame_t>> Framequeue;
     std::unordered_map<IServer *, std::vector<size_t>> Connectedsockets;
     std::vector<std::string /* Hostname */> Blacklist;
     std::vector<void * /* Module */> Networkmodules;
@@ -68,6 +71,10 @@ namespace Localnetworking
     {
         auto Entry = &Filters[Socket];
         Entry->push_back(Filter);
+    }
+    std::vector<IPAddress_t> &Getfilters(size_t Socket)
+    {
+        return Filters[Socket];
     }
     void Associatesocket(IServer *Server, size_t Socket)
     {
@@ -129,6 +136,29 @@ namespace Localnetworking
         }
 
         return 0;
+    }
+
+    // Map packets to and from the internal lists.
+    void Enqueueframe(IPAddress_t From, std::string &Packet)
+    {
+        size_t Socket = 0;
+        size_t Offset = 0;
+
+        do
+        {
+            Socket = Findsocket(From, Offset++);
+            Framequeue[Socket].push({ From, Packet });
+        } while (Socket != 0);
+    }
+    bool Dequeueframe(size_t Socket, IPAddress_t &From, std::string &Packet)
+    {
+        if (Framequeue[Socket].empty()) return false;
+
+        auto Frame = Framequeue[Socket].front();
+        Framequeue[Socket].pop();
+        Packet = Frame.Data;
+        From = Frame.From;
+        return true;
     }
 
     // The platform specific functionality.
