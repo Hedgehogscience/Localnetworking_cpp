@@ -157,12 +157,17 @@ namespace Winsock
             // Notify the developer that they'll have to deal with this.
             if (Flags)
             {
-                Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
-                    "##############################################################",
-                    "The current application is using special flags for Receive.",
-                    "Feel free to implement that in Localnetworking/Winsock.cpp.",
-                    "Or just hack it into your module.",
-                    "##############################################################"));
+                static bool Hasprinted = false;
+                if (!Hasprinted)
+                {
+                    Hasprinted = true;
+                    Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
+                        "##############################################################",
+                        "The current application is using special flags for Receive.",
+                        "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                        "Or just hack it into your module.",
+                        "##############################################################"));
+                }
             }
 
             // If we are on a blocking socket, poll until successful.
@@ -205,12 +210,17 @@ namespace Winsock
                     // Notify the developer that they'll have to deal with this.
                     if (Flags)
                     {
-                        Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
-                            "##############################################################",
-                            "The current application is using special flags for Receivefrom.",
-                            "Feel free to implement that in Localnetworking/Winsock.cpp.",
-                            "Or just hack it into your module.",
-                            "##############################################################"));
+                        static bool Hasprinted = false;
+                        if (!Hasprinted)
+                        {
+                            Hasprinted = true;
+                            Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
+                                "##############################################################",
+                                "The current application is using special flags for Receivefrom.",
+                                "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                                "Or just hack it into your module.",
+                                "##############################################################"));
+                        }
                     }
 
                     // Copy the sender information.
@@ -321,12 +331,17 @@ namespace Winsock
             // Notify the developer that they'll have to deal with this.
             if (Flags)
             {
-                Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
-                    "##############################################################",
-                    "The current application is using special flags for Send.",
-                    "Feel free to implement that in Localnetworking/Winsock.cpp.",
-                    "Or just hack it into your module.",
-                    "##############################################################"));
+                static bool Hasprinted = false;
+                if (!Hasprinted)
+                {
+                    Hasprinted = true;
+                    Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
+                        "##############################################################",
+                        "The current application is using special flags for Send.",
+                        "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                        "Or just hack it into your module.",
+                        "##############################################################"));
+                }
             }
 
             // If we are on a blocking socket, poll until successful.
@@ -365,12 +380,17 @@ namespace Winsock
             // Notify the developer that they'll have to deal with this.
             if (Flags)
             {
-                Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
-                    "##############################################################",
-                    "The current application is using special flags for Sendto.",
-                    "Feel free to implement that in Localnetworking/Winsock.cpp.",
-                    "Or just hack it into your module.",
-                    "##############################################################"));
+                static bool Hasprinted = false;
+                if (!Hasprinted)
+                {
+                    Hasprinted = true;
+                    Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
+                        "##############################################################",
+                        "The current application is using special flags for Sendto.",
+                        "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                        "Or just hack it into your module.",
+                        "##############################################################"));
+                }
             }
 
             // Convert to the universal representation.
