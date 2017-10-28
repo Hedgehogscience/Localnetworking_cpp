@@ -198,6 +198,30 @@ namespace Localnetworking
         return true;
     }
 
+    // Periodically poll the servers for datagrams.
+    void Datagrampollthread()
+    {
+        auto Buffer = std::make_unique<char []>(10240);
+        uint32_t Buffersize = 10240;
+
+        while(true)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+
+            for(auto &Instance : Serverinstances)
+            {
+                Buffersize = 10240;
+                IPAddress_t Clientaddress;
+                if(Instance.second->onPacketread(Clientaddress, Buffer.get(), &Buffersize))
+                {
+                    auto Packet = std::string(Buffer.get(), Buffersize);
+                    Enqueueframe(Clientaddress, Packet);
+                }
+            }
+        }
+    }
+    namespace { struct Threadloader { Threadloader() { std::thread(Datagrampollthread).detach(); } }; static Threadloader Loader{}; }
+    
     // The platform specific functionality.
     #if defined (_WIN32)
     void *Findfunction(void *Module, const char *Function)

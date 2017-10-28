@@ -22,6 +22,7 @@
 #include <vector>
 #include <memory>
 #include <chrono>
+#include <thread>
 #include <mutex>
 #include <ctime>
 #include <queue>
