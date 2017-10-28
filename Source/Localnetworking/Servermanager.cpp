@@ -85,7 +85,7 @@ namespace Localnetworking
     std::vector<size_t> Activesockets()
     {
         static std::vector<size_t> Sockets;
-        static uint32_t Timestamp = 0;
+        static int64_t Timestamp = 0;
 
         // Throttle the updating.
         if (Timestamp + 5 < time(NULL)) return Sockets;
