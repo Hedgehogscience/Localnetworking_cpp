@@ -302,7 +302,96 @@ namespace Winsock
 
         return Result;
     }
+    int __stdcall Send(size_t Socket, const char *Buffer, int Length, int Flags)
+    {
+        bool Successful = false;
+        uint32_t Result = Length;
 
+        // Pointer checking because few professional game-developers know their shit.
+        if (!Buffer)
+        {
+            WSASetLastError(EFAULT);
+            return -1;
+        }
+
+        // Find a server associated with this socket and send.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (Server)
+        {
+            // Notify the developer that they'll have to deal with this.
+            if (Flags)
+            {
+                Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
+                    "##############################################################",
+                    "The current application is using special flags for Send.",
+                    "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                    "Or just hack it into your module.",
+                    "##############################################################"));
+            }
+
+            // If we are on a blocking socket, poll until successful.
+            do
+            {
+                Successful = Server->onStreamwrite(Socket, Buffer, Result);
+                if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            } while (!Successful && Blockingsockets[Socket]);
+        }
+
+        // Ask Windows to send the data from the socket if it's not ours.
+        if (!Server) CALLWS(send, &Result, Socket, Buffer, Length, Flags);
+
+        // Return the length or error.
+        if (Server && !Successful) return -1;
+        if (Result == uint32_t(-1)) return -1;
+        return std::min(Result, uint32_t(INT32_MAX));
+    }
+    int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, const struct sockaddr *To, int Tolength)
+    {
+        bool Successful = false;
+        uint32_t Result = Length;
+
+        // Pointer checking because few professional game-developers know their shit.
+        if (!Buffer || !To)
+        {
+            WSASetLastError(EFAULT);
+            return -1;
+        }
+
+        // Find a server associated with this socket aor address.
+        auto Server = Localnetworking::Findserver(Plainaddress(To));
+        if (!Server) Server = Localnetworking::Findserver(Socket);
+        if (Server)
+        {
+            // Notify the developer that they'll have to deal with this.
+            if (Flags)
+            {
+                Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
+                    "##############################################################",
+                    "The current application is using special flags for Sendto.",
+                    "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                    "Or just hack it into your module.",
+                    "##############################################################"));
+            }
+
+            // Convert to the universal representation.
+            auto Address = Localaddress(To);
+
+            // If we are on a blocking socket, poll until successful.
+            do
+            {
+                Successful = Server->onPacketwrite(Address, Buffer, Result);
+                if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            } while (!Successful && Blockingsockets[Socket]);
+        }
+
+        // Ask Windows to send the data from the socket if it's not ours.
+        if (!Server) CALLWS(sendto, &Result, Socket, Buffer, Length, Flags, To, Tolength);
+
+        // Return the length or error.
+        if (Server && !Successful) return -1;
+        if (Result == uint32_t(-1)) return -1;
+        return std::min(Result, uint32_t(INT32_MAX));
+    }
 
     #pragma endregion
 
