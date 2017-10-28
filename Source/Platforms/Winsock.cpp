@@ -157,7 +157,7 @@ namespace Winsock
             // Notify the developer that they'll have to deal with this.
             if (Flags)
             {
-                Infoprint(va("\n%s\n%s\n%s\%s\n%s",
+                Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
                     "##############################################################",
                     "The current application is using special flags for Receive.",
                     "Feel free to implement that in Localnetworking/Winsock.cpp.",
@@ -205,7 +205,7 @@ namespace Winsock
                     // Notify the developer that they'll have to deal with this.
                     if (Flags)
                     {
-                        Infoprint(va("\n%s\n%s\n%s\%s\n%s",
+                        Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
                             "##############################################################",
                             "The current application is using special flags for Receivefrom.",
                             "Feel free to implement that in Localnetworking/Winsock.cpp.",
@@ -238,7 +238,70 @@ namespace Winsock
         CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
         return std::min(Result, uint32_t(INT32_MAX));
     }
+    int __stdcall Select(int fdsCount, fd_set *Readfds, fd_set *Writefds, fd_set *Exceptfds, timeval *Timeout)
+    {
+        int Result = 0;
+        std::vector<size_t> Readsockets;
+        std::vector<size_t> Writesockets;
 
+        for (auto &Item : Localnetworking::Activesockets())
+        {
+            if (Readfds)
+            {
+                if (FD_ISSET(Item, Readfds))
+                {
+                    Readsockets.push_back(Item);
+                    FD_CLR(Item, Readfds);
+                }
+            }
+
+            if (Writefds)
+            {
+                if (FD_ISSET(Item, Writefds))
+                {
+                    Writesockets.push_back(Item);
+                    FD_CLR(Item, Writefds);
+                }
+            }
+
+            if (Exceptfds)
+            {
+                if (FD_ISSET(Item, Exceptfds))
+                {
+                    FD_CLR(Item, Exceptfds);
+                }
+            }
+        }
+
+        if ((!Readfds || Readfds->fd_count == 0) && (!Writefds || Writefds->fd_count == 0))
+        {
+            Timeout->tv_sec = 0;
+            Timeout->tv_usec = 0;
+        }
+
+        CALLWS(select, &Result, fdsCount, Readfds, Writefds, Exceptfds, Timeout);
+        if (Result < 0) Result = 0;
+
+        for (size_t i = 0; i < Readsockets.size(); i++)
+        {
+            if (Readfds)
+            {
+                FD_SET(Readsockets.at(i), Readfds);
+                Result++;
+            }
+        }
+
+        for (size_t i = 0; i < Writesockets.size(); i++)
+        {
+            if (Writefds)
+            {
+                FD_SET(Writesockets.at(i), Writefds);
+                Result++;
+            }
+        }
+
+        return Result;
+    }
 
 
     #pragma endregion

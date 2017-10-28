@@ -67,6 +67,43 @@ namespace Localnetworking
     }
 
     // Modify a servers properties.
+    bool isAssociated(size_t Socket)
+    {
+        for (auto &Entry : Connectedsockets)
+        {
+            for (auto &Berkeley : Entry.second)
+            {
+                if (Berkeley == Socket)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+    std::vector<size_t> Activesockets()
+    {
+        static std::vector<size_t> Sockets;
+        static uint32_t Timestamp = 0;
+
+        // Throttle the updating.
+        if (Timestamp + 5 < time(NULL)) return Sockets;
+        Timestamp = time(NULL);
+        Sockets.clear();
+
+        // Get all connected sockets.
+        for (auto &List : Connectedsockets)
+            for(auto &Item : List.second)
+                Sockets.push_back(Item);
+
+        // Remove duplicates.
+        std::sort(Sockets.begin(), Sockets.end());
+        auto Last = std::unique(Sockets.begin(), Sockets.end());
+        Sockets.erase(Last, Sockets.end());
+
+        return Sockets;
+    }
     void Addfilter(size_t Socket, IPAddress_t Filter)
     {
         auto Entry = &Filters[Socket];
@@ -90,21 +127,6 @@ namespace Localnetworking
                 break;
             }
         }
-    }
-    bool isAssociated(size_t Socket)
-    {
-        for (auto &Entry : Connectedsockets)
-        {
-            for (auto &Berkeley : Entry.second)
-            {
-                if (Berkeley == Socket)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     // Query the servermaps.
