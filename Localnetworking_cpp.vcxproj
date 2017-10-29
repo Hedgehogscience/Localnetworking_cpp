@@ -201,7 +201,9 @@
     <ClInclude Include="Source\Utility\Cryptography\FNV1Hash.h" />
     <ClInclude Include="Source\Utility\Data\Base64.h" />
     <ClInclude Include="Source\Utility\Data\Bytebuffer.h" />
+    <ClInclude Include="Source\Utility\Data\PackageFS.h" />
     <ClInclude Include="Source\Utility\Data\SystemIO.h" />
+    <ClInclude Include="Source\Utility\Data\zip_file.hpp" />
     <ClInclude Include="Source\Utility\Text\Logfile.h" />
     <ClInclude Include="Source\Utility\Text\Variadicstring.h" />
   </ItemGroup>
@@ -213,6 +215,7 @@
     <ClCompile Include="Source\Utility\Binary\Memprotect.cpp" />
     <ClCompile Include="Source\Utility\Binary\Patternscan.cpp" />
     <ClCompile Include="Source\Utility\Data\Bytebuffer.cpp" />
+    <ClCompile Include="Source\Utility\Data\PackageFS.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Localnetworking_cpp.licenseheader" />
