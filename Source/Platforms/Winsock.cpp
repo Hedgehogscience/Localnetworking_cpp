@@ -514,6 +514,30 @@ namespace Winsock
 
         return Result;
     }
+    int __stdcall Getsockname(size_t Socket, struct sockaddr *Name, int *Namelength)
+    {
+        int Result = 0;
+
+        // Find a server associated with this socket.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (!Server) CALLWS(getsockname, &Result, Socket, Name, Namelength);
+        if (Server)
+        {
+            // Create a fake address.
+            sockaddr_in *Localname = reinterpret_cast<sockaddr_in *>(Name);
+            *Namelength = sizeof(sockaddr_in);
+
+            auto Hostname = Localnetworking::Findhostname(Server);
+            auto Address = inet_addr(Hostname.c_str());
+            if (!Address) Address = Hash::FNV1a_32(Hostname.c_str());
+
+            Localname->sin_port = 0;
+            Localname->sin_family = AF_INET;
+            Localname->sin_addr.S_un.S_addr = Address;
+        }
+
+        return Result;
+    }
     int __stdcall Closesocket(size_t Socket)
     {
         // Find a server associated with this socket and disconnect it.
@@ -542,7 +566,46 @@ namespace Winsock
     #pragma endregion
 
     #pragma region Installer
+    struct WSInstaller
+    {
+        WSInstaller()
+        {
+            // Helper-macro to save the developers fingers.
+            #define INSTALL_HOOK(_Function, _Replacement) {                                                                                     \
+            auto Address = (void *)GetProcAddress(GetModuleHandleA("wsock32.dll"), _Function);                                                  \
+            if(Address) {                                                                                                                       \
+            Winsock::WSHooks1[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
+            ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks1[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
+            Address = (void *)GetProcAddress(GetModuleHandleA("WS2_32.dll"), _Function);                                                        \
+            if(Address) {                                                                                                                       \
+            Winsock::WSHooks2[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
+            ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
+            }                                                                                                                                   \
+
+            // Place the hooks directly in winsock.
+            INSTALL_HOOK("bind", Bind);
+            INSTALL_HOOK("connect", Connect);
+            INSTALL_HOOK("ioctlsocket", IOControlsocket);
+            INSTALL_HOOK("recv", Receive);
+            INSTALL_HOOK("recvfrom", Receivefrom);
+            INSTALL_HOOK("select", Select);
+            INSTALL_HOOK("send", Send);
+            INSTALL_HOOK("sendto", Sendto);
+            INSTALL_HOOK("gethostbyname", Gethostbyname);
+            INSTALL_HOOK("getaddrinfo", Getaddrinfo);
+            INSTALL_HOOK("getpeername", Getpeername);
+            INSTALL_HOOK("getsockname", Getsockname);
+            INSTALL_HOOK("closesocket", Closesocket);
+            INSTALL_HOOK("shutdown", Shutdown);
+        }
+    };
+
+    // Install the hooks on startup.
+    static WSInstaller Installer{};
     #pragma endregion
 }
 
+#undef INSTALL_HOOK
+#undef CALLWS_NORET
+#undef CALLWS
 #endif
