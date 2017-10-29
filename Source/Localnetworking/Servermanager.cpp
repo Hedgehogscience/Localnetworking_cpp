@@ -155,6 +155,16 @@ namespace Localnetworking
         else
             return nullptr;
     }
+    std::string Findhostname(IServer *Server)
+    {
+        for (auto &Item : Serverinstances)
+        {
+            if (Item.second == Server)
+                return Item.first;
+        }
+
+        return "";
+    }
     size_t Findsocket(IPAddress_t Server, size_t Offset)
     {
         for(auto &Collection : Filters)

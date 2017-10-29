@@ -490,10 +490,55 @@ namespace Winsock
         Debugprint(va("%s: \"%s\" -> %s", __func__, Nodename, inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)));
         return WSResult;
     }
+    int __stdcall Getpeername(size_t Socket, struct sockaddr *Name, int *Namelength)
+    {
+        int Result = 0;
 
+        // Find a server associated with this socket.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (!Server) CALLWS(getpeername, &Result, Socket, Name, Namelength);
+        if (Server)
+        {
+            // Create a fake address.
+            sockaddr_in *Localname = reinterpret_cast<sockaddr_in *>(Name);
+            *Namelength = sizeof(sockaddr_in);
 
+            auto Hostname = Localnetworking::Findhostname(Server);
+            auto Address = inet_addr(Hostname.c_str());
+            if (!Address) Address = Hash::FNV1a_32(Hostname.c_str());
 
+            Localname->sin_port = 0;
+            Localname->sin_family = AF_INET;
+            Localname->sin_addr.S_un.S_addr = Address;
+        }
 
+        return Result;
+    }
+    int __stdcall Closesocket(size_t Socket)
+    {
+        // Find a server associated with this socket and disconnect it.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (Server) Server->onDisconnect(Socket);
+        CALLWS_NORET(closesocket, Socket);
+
+        return 0;
+    }
+    int __stdcall Shutdown(size_t Socket, int How)
+    {
+        // Find a server associated with this socket and disconnect it.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (Server) Server->onDisconnect(Socket);
+        CALLWS_NORET(shutdown, Socket, How);
+
+        return 0;
+    }
+
+    /*
+        TODO(Convery):
+        Implement more shims as needed.
+        The async ones can be interesting.
+        Remember to add new ones to the installer!
+    */
     #pragma endregion
 
     #pragma region Installer
