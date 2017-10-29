@@ -413,6 +413,87 @@ namespace Winsock
         return std::min(Result, uint32_t(INT32_MAX));
     }
 
+    hostent *__stdcall Gethostbyname(const char *Hostname)
+    {
+        // Create a server from the hostname, or ask Windows for it.
+        auto Server = Localnetworking::Createserver(Hostname);
+        if (!Server)
+        {
+            static hostent *Resolvedhost;
+            CALLWS(gethostbyname, &Resolvedhost, Hostname);
+
+            Debugprint(va("%s: \"%s\" -> %s", __func__, Hostname, Resolvedhost ? inet_ntoa(*(in_addr*)Resolvedhost->h_addr_list[0]) : "Could not resolve"));
+            return Resolvedhost;
+        }
+
+        // Create a fake IP address from the hostname.
+        uint32_t IPHash = Hash::FNV1a_32(Hostname);
+        uint8_t *IP = (uint8_t *)&IPHash;
+
+        // Associate the server instance with the fake IP address we created.
+        auto ReadableIP = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
+        Localnetworking::Emplaceserver(ReadableIP, Server);
+
+        // Create the Winsock address struct.
+        in_addr *Localaddress = new in_addr();
+        in_addr *LocalsocketAddresslist[2];
+        Localaddress->S_un.S_addr = inet_addr(ReadableIP.c_str());
+        LocalsocketAddresslist[0] = Localaddress;
+        LocalsocketAddresslist[1] = nullptr;
+
+        // Create the Winsock hostentry struct.
+        hostent *Localhost = new hostent();
+        Localhost->h_aliases = NULL;
+        Localhost->h_addrtype = AF_INET;
+        Localhost->h_length = sizeof(in_addr);
+        Localhost->h_name = const_cast<char *>(Hostname);
+        Localhost->h_addr_list = (char **)LocalsocketAddresslist;
+
+        // Notify the developer about this event.
+        Debugprint(va("%s: \"%s\" -> %s", __func__, Hostname, inet_ntoa(*(in_addr*)Localhost->h_addr_list[0])));
+        return Localhost;
+    }
+    int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
+    {
+        int WSResult = 0;
+
+        // Create a server from the hostname, or ask Windows for it.
+        auto Server = Localnetworking::Createserver(Nodename);
+
+        // Resolve the hostname through Winsock to allocate the result struct.
+        if (Hints) Hints->ai_family = PF_INET;
+        CALLWS(getaddrinfo, &WSResult, Nodename, Servicename, Hints, Result);
+
+        // Modify the allocated structure to match our server.
+        if (Server)
+        {
+            // Resolve a known host if the previous call failed.
+            if (0 != WSResult) CALLWS(getaddrinfo, &WSResult, "localhost", nullptr, Hints, Result);
+            if (0 != WSResult) return WSResult;
+
+            // Create a fake IP address from the hostname.
+            uint32_t IPHash = Hash::FNV1a_32(Nodename);
+            uint8_t *IP = (uint8_t *)&IPHash;
+
+            // Associate the server instance with the fake IP address we created.
+            auto ReadableIP = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
+            Localnetworking::Emplaceserver(ReadableIP, Server);
+
+            // Set the IP for all records.
+            for (ADDRINFOA *ptr = *Result; ptr != NULL; ptr = ptr->ai_next)
+            {
+                ((sockaddr_in *)ptr->ai_addr)->sin_addr.S_un.S_addr = inet_addr(ReadableIP.c_str());
+            }
+        }
+
+        // Notify the developer about this event.
+        Debugprint(va("%s: \"%s\" -> %s", __func__, Nodename, inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)));
+        return WSResult;
+    }
+
+
+
+
     #pragma endregion
 
     #pragma region Installer

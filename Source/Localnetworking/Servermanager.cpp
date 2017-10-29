@@ -65,6 +65,10 @@ namespace Localnetworking
         Blacklist.push_back(Hostname);
         return nullptr;
     }
+    void Emplaceserver(std::string Hostname, IServer *Server)
+    {
+        Serverinstances.emplace(Hostname, Server);
+    }
 
     // Modify a servers properties.
     bool isAssociated(size_t Socket)
@@ -221,7 +225,7 @@ namespace Localnetworking
         }
     }
     namespace { struct Threadloader { Threadloader() { std::thread(Datagrampollthread).detach(); } }; static Threadloader Loader{}; }
-    
+
     // The platform specific functionality.
     #if defined (_WIN32)
     void *Findfunction(void *Module, const char *Function)

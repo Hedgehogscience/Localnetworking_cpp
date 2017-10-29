@@ -16,6 +16,7 @@ namespace Localnetworking
 {
     // Create a new server instance.
     IServer *Createserver(std::string Hostname);
+    void Emplaceserver(std::string Hostname, IServer *Server);
 
     // Modify a servers properties.
     bool isAssociated(size_t Socket);
