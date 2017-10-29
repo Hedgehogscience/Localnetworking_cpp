@@ -9,6 +9,7 @@
 #include "../Stdinclude.h"
 
 #define Address Server.Plainaddress
+constexpr const char *Archetecture = sizeof(void *) == sizeof(uint64_t) ? "64" : "32";
 
 namespace Localnetworking
 {
@@ -25,6 +26,7 @@ namespace Localnetworking
     // Forward declarations for  platform specific functionality.
     void *Findfunction(void *Module, const char *Function);
     void *Loadmodule(const char *Path);
+    std::string Temporarydir();
 
     // Create a new server instance.
     IServer *Createserver(std::string Hostname)
@@ -236,6 +238,35 @@ namespace Localnetworking
     }
     namespace { struct Threadloader { Threadloader() { std::thread(Datagrampollthread).detach(); } }; static Threadloader Loader{}; }
 
+    // Load all modules from the plugins directory.
+    void Loadmodules()
+    {
+        std::vector<std::string> Filenames;
+        std::string Path = "./Plugins/";
+
+        // Enumerate all modules in the directory.
+        if (Findfiles(Path, &Filenames, ".LNmodule"))
+        {
+            for (auto &Item : Filenames)
+            {
+                std::vector<std::string> Archivefiles;
+                auto Archive = Package::Loadarchive("./Plugins/" + Item);
+                if (Package::Findfiles(Archive, va(".LN%s", Archetecture), &Archivefiles))
+                {
+                    // Write the file to disk as loading modules from memory is not very portable.
+                    auto Path = Temporarydir() + "/" + Archivefiles[0]; std::remove(Path.c_str());
+                    Writefile(Path, Package::Read(Archive, Archivefiles[0]));
+
+                    // Load the module from temp storage.
+                    Networkmodules.push_back(Loadmodule(Path.c_str()));
+                }
+            }
+        }
+
+        // Sideload any developer module.
+        Networkmodules.push_back(Loadmodule("./Plugins/Developermodule"));
+    }
+
     // The platform specific functionality.
     #if defined (_WIN32)
     void *Findfunction(void *Module, const char *Function)
@@ -246,6 +277,12 @@ namespace Localnetworking
     {
         return (void *)LoadLibraryA(Path);
     }
+    std::string Temporarydir()
+    {
+        char Buffer[1024]{};
+        GetTempPathA(1024, Buffer);
+        return { Buffer };
+    }
     #else
 
     void *Findfunction(void *Module, const char *Function)
@@ -255,6 +292,22 @@ namespace Localnetworking
     void *Loadmodule(const char *Path)
     {
         return (void *)dlopen(Path, RTLD_LAZY);
+    }
+    std::string Temporarydir()
+    {
+        auto Folder = getenv("TMPDIR");
+        if(Folder) return { Folder };
+
+        Folder = getenv("TMP");
+        if(Folder) return { Folder };
+
+        Folder = getenv("TEMP");
+        if(Folder) return { Folder };
+
+        Folder = getenv("TEMPDIR");
+        if(Folder) return { Folder };
+
+        return "/tmp";
     }
     #endif
 }

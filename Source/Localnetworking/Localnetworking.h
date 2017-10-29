@@ -34,4 +34,7 @@ namespace Localnetworking
     // Map packets to and from the internal lists.
     void Enqueueframe(IPAddress_t From, std::string &Packet);
     bool Dequeueframe(size_t Socket, IPAddress_t &From, std::string &Packet);
+
+    // Load all modules from the plugins directory.
+    void Loadmodules();
 }
