@@ -47,7 +47,7 @@ struct IStreamserver : IServer
     {
         return Send(Socket, Databuffer.data(), uint32_t(Databuffer.size()));
     }
-    virtual void onData(const size_t Socket, std::vector<uint8_t> &Data) = 0;
+    virtual void onData(const size_t Socket, std::vector<uint8_t> &Stream) = 0;
 
     // Stream-based IO for protocols such as TCP.
     virtual void onDisconnect(const size_t Socket)
@@ -97,6 +97,8 @@ struct IStreamserver : IServer
             }
         }
         Threadguard.unlock();
+
+        return true;
     }
     virtual bool onStreamwrite(const size_t Socket, const void *Databuffer, const uint32_t Datasize)
     {
@@ -124,11 +126,15 @@ struct IStreamserver : IServer
         (void)Client;
         (void)Datasize;
         (void)Databuffer;
+
+        return false;
     }
     virtual bool onPacketwrite(const IPAddress_t &Server, const void *Databuffer, const uint32_t Datasize)
     {
         (void)Server;
         (void)Datasize;
         (void)Databuffer;
+
+        return false;
     }
 };
