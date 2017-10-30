@@ -24,6 +24,7 @@ namespace Localnetworking
     void Addfilter(size_t Socket, IPAddress_t Filter);
     void Associatesocket(IServer *Server, size_t Socket);
     void Disassociatesocket(IServer *Server, size_t Socket);
+    void Associateaddress(std::string IP, std::string Hostname);
 
     // Query the servermaps.
     IServer *Findserver(size_t Socket);
@@ -35,6 +36,7 @@ namespace Localnetworking
     void Enqueueframe(IPAddress_t From, std::string &Packet);
     bool Dequeueframe(size_t Socket, IPAddress_t &From, std::string &Packet);
 
-    // Load all modules from the plugins directory.
+    // Load all modules from the plugins directory and start polling.
+    void Startpollthread();
     void Loadmodules();
 }

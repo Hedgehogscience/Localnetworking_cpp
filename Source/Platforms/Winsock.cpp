@@ -60,8 +60,8 @@ namespace Winsock
     }
     uint16_t WSPort(const struct sockaddr *Sockaddr)
     {
-        if (Sockaddr->sa_family == AF_INET6) return ((struct sockaddr_in6 *)Sockaddr)->sin6_port;
-        else return ((struct sockaddr_in *)Sockaddr)->sin_port;
+        if (Sockaddr->sa_family == AF_INET6) return ntohs(((struct sockaddr_in6 *)Sockaddr)->sin6_port);
+        else return ntohs(((struct sockaddr_in *)Sockaddr)->sin_port);
     }
     IPAddress_t Localaddress(const struct sockaddr *Sockaddr)
     {
@@ -432,6 +432,7 @@ namespace Winsock
 
         // Associate the server instance with the fake IP address we created.
         auto ReadableIP = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
+        Localnetworking::Associateaddress(ReadableIP, Hostname);
         Localnetworking::Emplaceserver(ReadableIP, Server);
 
         // Create the Winsock address struct.
@@ -477,6 +478,7 @@ namespace Winsock
 
             // Associate the server instance with the fake IP address we created.
             auto ReadableIP = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
+            Localnetworking::Associateaddress(ReadableIP, Nodename);
             Localnetworking::Emplaceserver(ReadableIP, Server);
 
             // Set the IP for all records.

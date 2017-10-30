@@ -15,6 +15,7 @@ namespace Localnetworking
 {
     using Frame_t = struct { IPAddress_t From; std::string Data; };
 
+    std::unordered_map<std::string /* IP */, std::string /* Hostname */> Resolvercache;
     std::unordered_map<std::string /* Hostname */, void * /* Module */> Modulecache;
     std::unordered_map<std::string /* Hostname */, IServer *> Serverinstances;
     std::unordered_map<size_t /* Socket */, std::vector<IPAddress_t>> Filters;
@@ -36,7 +37,7 @@ namespace Localnetworking
             return nullptr;
 
         // Create a new instance.
-        auto Createserver = [&](void *Module) -> IServer *
+        auto Lambda = [&](void *Module) -> IServer *
         {
             // Find the export in the module.
             auto pFunction = Findfunction(Module, "Createserver");
@@ -44,7 +45,8 @@ namespace Localnetworking
 
             // Ask the module to create a new instance for the hostname.
             auto Function = (IServer * (*)(const char *))pFunction;
-            auto Result = Function(Hostname.c_str());
+            auto Result = Function(Resolvercache[Hostname].c_str());
+            if(!Result) Result = Function(Hostname.c_str());
 
             return Result;
         };
@@ -53,13 +55,13 @@ namespace Localnetworking
         auto Cache = Modulecache.find(Hostname);
         if (Cache != Modulecache.end())
         {
-            return Createserver(Cache->second);
+            return Lambda(Cache->second);
         }
 
         // Iterate over all the known modules.
         for (auto &Item : Networkmodules)
         {
-            auto Server = Createserver(Item);
+            auto Server = Lambda(Item);
             if (Server) return Server;
         }
 
@@ -133,6 +135,10 @@ namespace Localnetworking
                 break;
             }
         }
+    }
+    void Associateaddress(std::string IP, std::string Hostname)
+    {
+        Resolvercache[IP] = Hostname;
     }
 
     // Query the servermaps.
@@ -236,7 +242,10 @@ namespace Localnetworking
             }
         }
     }
-    namespace { struct Threadloader { Threadloader() { std::thread(Datagrampollthread).detach(); } }; static Threadloader Loader{}; }
+    void Startpollthread()
+    {
+        std::thread(Datagrampollthread).detach();
+    }
 
     // Load all modules from the plugins directory.
     void Loadmodules()
