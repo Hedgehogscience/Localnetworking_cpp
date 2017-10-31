@@ -94,11 +94,15 @@ namespace Winsock
 
         // Check if we have any server with this socket and disconnect it.
         auto Server = Localnetworking::Findserver(Socket);
-        if (Server) Server->onDisconnect(Socket);
+        if (Server)
+        {
+            Server->onDisconnect(Socket);
+            Localnetworking::Disassociatesocket(Server, Socket);
+        }
 
-        // If there's no server, try to create one from the hostname.
-        if (!Server) Server = Localnetworking::Createserver(Plainaddress(Name));
-        if (Server) Localnetworking::Disassociatesocket(Server, Socket);
+        // Create a new server instance from the hostname, even if it's the same host.
+        Server = Localnetworking::Createserver(Plainaddress(Name));
+        if (Server) Localnetworking::Associatesocket(Server, Socket);
         if (Server) Server->onConnect(Socket, WSPort(Name));
 
         // Ask Windows to connect the socket if there's no server.
@@ -176,6 +180,9 @@ namespace Winsock
                 Successful = Server->onStreamread(Socket, Buffer, &Result);
                 if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
             } while (!Successful && Blockingsockets[Socket]);
+
+            // Ensure that any errors are non-fatal.
+            if(!Successful) WSASetLastError(WSAEWOULDBLOCK);
         }
 
         // Ask Windows to fetch some data from the socket if it's not ours.
