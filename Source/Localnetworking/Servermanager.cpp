@@ -36,6 +36,10 @@ namespace Localnetworking
         if (Blacklist.end() != std::find(Blacklist.begin(), Blacklist.end(), Hostname))
             return nullptr;
 
+        // Don't create a new instance if we already have created one.
+        if (Serverinstances.end() != Serverinstances.find(Hostname))
+            return Serverinstances[Hostname];
+
         // Create a new instance.
         auto Lambda = [&](void *Module) -> IServer *
         {
