@@ -21,7 +21,7 @@ struct IPAddress_t
 struct IServer
 {
     // Packet-based IO for protocols such as UDP and ICMP.
-    virtual bool onPacketread(const IPAddress_t &Client, void *Databuffer, uint32_t *Datasize) = 0;
+    virtual bool onPacketread(IPAddress_t &Server, void *Databuffer, uint32_t *Datasize) = 0;
     virtual bool onPacketwrite(const IPAddress_t &Server, const void *Databuffer, const uint32_t Datasize) = 0;
 
     // Stream-based IO for protocols such as TCP.

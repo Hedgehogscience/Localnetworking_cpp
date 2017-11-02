@@ -121,9 +121,9 @@ struct IStreamserver : IServer
     }
 
     // Nullsub the unused callbacks.
-    virtual bool onPacketread(const IPAddress_t &Client, void *Databuffer, uint32_t *Datasize)
+    virtual bool onPacketread(IPAddress_t &Server, void *Databuffer, uint32_t *Datasize)
     {
-        (void)Client;
+        (void)Server;
         (void)Datasize;
         (void)Databuffer;
 
