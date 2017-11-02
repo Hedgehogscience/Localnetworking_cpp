@@ -1,16 +1,16 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 24-08-2017
+    Started: 26-10-2017
     License: MIT
     Notes:
-        Interface shim for windows sockets.
+        Provides an interface-shim for Windows sockets.
 */
 
+// Naturally this file is for Windows only.
+#if defined (_WIN32)
 #include "../Stdinclude.h"
 
-#if defined (_WIN32)
-
-// Windows annoyance.
+// Remove some Windows annoyance.
 #if defined(min) || defined(max)
     #undef min
     #undef max
@@ -19,7 +19,7 @@
 namespace Winsock
 {
     #pragma region Hooking
-    // Track all the hooks installed into ws2_32.dll by name.
+    // Track all the hooks installed into WS2_32 and wsock32 by name.
     std::unordered_map<std::string, void *> WSHooks1;
     std::unordered_map<std::string, void *> WSHooks2;
 
@@ -45,10 +45,8 @@ namespace Winsock
     #pragma endregion
 
     #pragma region Helpers
-    std::unordered_map<IServer *, bool /* Active */ > Datagramservers;
-    std::unordered_map<IServer *, std::string /* Hostinfo */> Hostinfo;
-    std::unordered_map<size_t /* Socket */, bool /* Blocking */> Anyserver;
-    std::unordered_map<size_t /* Socket */, bool /* Blocking */> isNonblocking;
+    std::unordered_map<size_t /* Socket */, bool> Blockingsockets;
+
     std::string Plainaddress(const struct sockaddr *Sockaddr)
     {
         auto Address = std::make_unique<char[]>(INET6_ADDRSTRLEN);
@@ -60,64 +58,72 @@ namespace Winsock
 
         return std::string(Address.get());
     }
+    uint16_t WSPort(const struct sockaddr *Sockaddr)
+    {
+        if (Sockaddr->sa_family == AF_INET6) return ntohs(((struct sockaddr_in6 *)Sockaddr)->sin6_port);
+        else return ntohs(((struct sockaddr_in *)Sockaddr)->sin_port);
+    }
+    IPAddress_t Localaddress(const struct sockaddr *Sockaddr)
+    {
+        IPAddress_t Result{};
+        Result.Port = WSPort(Sockaddr);
+        auto Address = Plainaddress(Sockaddr);
+        std::memcpy(Result.Plainaddress, Address.c_str(), Address.size());
+
+        return Result;
+    }
     #pragma endregion
 
     #pragma region Shims
     int __stdcall Bind(size_t Socket, const struct sockaddr *Name, int Namelength)
     {
         int Result = 0;
-        IServer *Server = Findserver(Socket);
-        if (!Server) Server = Findserver(Plainaddress(Name));
-        if (!Server) Server = Createserver(Socket, Plainaddress(Name));
-        if (!Server) CALLWS(bind, &Result, Socket, Name, Namelength);
-        if (Server) isNonblocking[Socket];
 
-        if (*(uint32_t *)&Name->sa_data[2] == 0) Anyserver[Socket] = true;
-        else Anyserver[Socket] = false;
+        // Create a server if needed.
+        auto Server = Localnetworking::Findserver(Plainaddress(Name));
+        if (!Server) Server = Localnetworking::Createserver(Plainaddress(Name));
+        if (!Server) CALLWS(bind, &Result, Socket, Name, Namelength);
+        if (Server) Localnetworking::Associatesocket(Server, Socket);
+        Localnetworking::Addfilter(Socket, Localaddress(Name));
+
         return Result;
     }
     int __stdcall Connect(size_t Socket, const struct sockaddr *Name, int Namelength)
     {
         int Result = 0;
-        short Port = 0;
-        IServer *Server = Findserver(Socket);
-        if (Server) isNonblocking[Socket];
 
-        // Disconnect any existing server instance.
-        if (Server && Server->Capabilities() & ISERVER_EXTENDED)
-            (reinterpret_cast<IServerEx *>(Server))->onDisconnect(Socket);
-
-        // Get the port the game wants to use.
-        if (Name->sa_family == AF_INET6)
-            Port = ntohs(((sockaddr_in6 *)Name)->sin6_port);
-        else
-            Port = ntohs(((sockaddr_in *)Name)->sin_port);
-
-        // If there's no socket connected, try to create one by address.
-        if (!Server) Server = Createserver(Socket, Plainaddress(Name));
-        if (Server && Server->Capabilities() & ISERVER_EXTENDED)
+        // Check if we have any server with this socket and disconnect it.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (Server)
         {
-            (reinterpret_cast<IServerEx *>(Server))->onConnect(Socket, Port);
+            Server->onDisconnect(Socket);
+            Localnetworking::Disassociatesocket(Server, Socket);
         }
 
-        // Even if we handle the socket, we'll call connect to mark it as active.
-        CALLWS(connect, &Result, Socket, Name, Namelength);
+        // Create a new server instance from the hostname, even if it's the same host.
+        Server = Localnetworking::Createserver(Plainaddress(Name));
+        if (Server) Localnetworking::Associatesocket(Server, Socket);
+        if (Server) Server->onConnect(Socket, WSPort(Name));
+
+        // Ask Windows to connect the socket if there's no server.
+        if (!Server) CALLWS(connect, &Result, Socket, Name, Namelength);
 
         // Debug information.
-        Debugprint(va("%s to %s:%u", Server || 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), Port));
+        Debugprint(va("%s to %s:%u", Server || 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), WSPort(Name)));
         return Server || 0 == Result ? 0 : -1;
     }
-    int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *pArgument)
+    int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *Argument)
     {
         int Result = 0;
         const char *Readable = "UNKNOWN";
 
+        // TODO(Convery): Implement more socket options here.
         switch (Command)
         {
             case FIONBIO:
             {
                 Readable = "FIONBIO";
-                isNonblocking[Socket] = *pArgument != 0;
+                Blockingsockets[Socket] = *Argument == 0;
                 break;
             }
             case FIONREAD: Readable = "FIONREAD"; break;
@@ -133,127 +139,129 @@ namespace Winsock
         Debugprint(va("Socket 0x%X modified %s", Socket, Readable));
 
         // Call the IOControl on the actual socket.
-        CALLWS(ioctlsocket, &Result, Socket, Command, pArgument);
+        CALLWS(ioctlsocket, &Result, Socket, Command, Argument);
         return Result;
     }
     int __stdcall Receive(size_t Socket, char *Buffer, int Length, int Flags)
     {
         bool Successful = false;
         uint32_t Result = Length;
-        IServer *Server = Findserver(Socket);
-        if (!Server) CALLWS(recv, &Result, Socket, Buffer, Length, Flags);
 
-        // While on a blocking server, poll the server every 10ms.
-        if (Server)
+        // Pointer checking because few professional game-developers know their shit.
+        if (!Buffer)
         {
-            if (Server->Capabilities() & ISERVER_EXTENDED)
-            {
-                IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
-
-                do
-                {
-                    Successful = ServerEx->onReadrequestEx(Socket, Buffer, &Result);
-                    if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                } while (!Successful && !isNonblocking[Socket]);
-            }
-            else
-            {
-                do
-                {
-                    Successful = Server->onReadrequest(Buffer, &Result);
-                    if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                } while (!Successful && !isNonblocking[Socket]);
-            }
+            WSASetLastError(EFAULT);
+            return -1;
         }
 
+        // Find a server associated with this socket and poll.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (Server)
+        {
+            // Notify the developer that they'll have to deal with this.
+            if (Flags)
+            {
+                static bool Hasprinted = false;
+                if (!Hasprinted)
+                {
+                    Hasprinted = true;
+                    Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
+                        "##############################################################",
+                        "The current application is using special flags for Receive.",
+                        "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                        "Or just hack it into your module.",
+                        "##############################################################"));
+                }
+            }
+
+            // If we are on a blocking socket, poll until successful.
+            do
+            {
+                Successful = Server->onStreamread(Socket, Buffer, &Result);
+                if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            } while (!Successful && Blockingsockets[Socket]);
+
+            // Ensure that any errors are non-fatal.
+            if(!Successful) WSASetLastError(WSAEWOULDBLOCK);
+        }
+
+        // Ask Windows to fetch some data from the socket if it's not ours.
+        if (!Server) CALLWS(recv, &Result, Socket, Buffer, Length, Flags);
+
+        // Return the length or error.
         if (Server && !Successful) return -1;
         if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
     int __stdcall Receivefrom(size_t Socket, char *Buffer, int Length, int Flags, struct sockaddr *From, int *Fromlength)
     {
-        /*
-            TODO(Convery):
-            As we don't copy the packets and have a queue per socket,
-            this may cause issues with the wrong socket getting the
-            packet. Not sure about the best way to solve this problem.
-        */
+        uint32_t Result;
 
-        bool Successful = false;
-        uint32_t Result = Length;
-        auto Lambda = [&](IServer *Server) -> bool
+        // Pointer checking because few professional game-developers know their shit.
+        if (!Buffer)
         {
-            bool Successful = false;
-
-            if (Server)
-            {
-                if (Server->Capabilities() & ISERVER_EXTENDED)
-                {
-                    auto Hackbuffer = std::make_unique<char[]>(Length);
-                    IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
-                    std::memcpy(Hackbuffer.get(), Hostinfo[Server].data(), Hostinfo[Server].size());
-
-                    Successful = ServerEx->onReadrequestEx(Socket, Hackbuffer.get(), &Result);
-                    if (Successful)
-                    {
-                        *Fromlength = int(Hostinfo[Server].size());
-                        std::memcpy(Buffer, Hackbuffer.get(), Result);
-                        std::memcpy(From, Hostinfo[Server].data(), Hostinfo[Server].size());
-                    }
-                }
-                else
-                {
-                    auto Hackbuffer = std::make_unique<char[]>(Length);
-                    std::memcpy(Hackbuffer.get(), Hostinfo[Server].data(), Hostinfo[Server].size());
-
-                    Successful = Server->onReadrequest(Hackbuffer.get(), &Result);
-                    if (Successful)
-                    {
-                        *Fromlength = int(Hostinfo[Server].size());
-                        std::memcpy(Buffer, Hackbuffer.get(), Result);
-                        std::memcpy(From, Hostinfo[Server].data(), Hostinfo[Server].size());
-                    }
-                }
-            }
-
-            return Successful;
-        };
-
-        // If we are blocking, poll until we get a packet.
-        do
-        {
-            // Check if it's a single-server socket.
-            Successful = Lambda(Findserver(Socket));
-            if (Successful) break;
-            Result = Length;
-
-            // Check if it's a multi-server socket.
-            if (Anyserver[Socket])
-            {
-                for (auto &Item : Datagramservers)
-                {
-                    if (Item.second)
-                    {
-                        Successful = Lambda(Item.first);
-                        if (Successful) break;
-                        Result = Length;
-                    }
-                }
-            }
-
-            if (!Successful)
-            {
-                CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
-                Successful = Result != uint32_t(-1);
-                if (!Successful) Result = Length;
-            }
-
-            // Wait 10ms for a packet.
-            if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            WSASetLastError(EFAULT);
+            return -1;
         }
-        while (!Successful && !isNonblocking[Socket]);
 
-        if (!Successful) return -1;
+        // Check if it's a socket associated with our network.
+        if (Localnetworking::isAssociated(Socket))
+        {
+            IPAddress_t Localfrom; std::string Packet;
+
+            // Check if there's any data on the socket and return that.
+            do
+            {
+                if (Localnetworking::Dequeueframe(Socket, Localfrom, Packet))
+                {
+                    // Notify the developer that they'll have to deal with this.
+                    if (Flags)
+                    {
+                        static bool Hasprinted = false;
+                        if (!Hasprinted)
+                        {
+                            Hasprinted = true;
+                            Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
+                                "##############################################################",
+                                "The current application is using special flags for Receivefrom.",
+                                "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                                "Or just hack it into your module.",
+                                "##############################################################"));
+                        }
+                    }
+
+                    // Copy the sender information.
+                    if (From && Fromlength)
+                    {
+                        if (*Fromlength == sizeof(sockaddr_in6))
+                        {
+                            From->sa_family = AF_INET6;
+                            ((struct sockaddr_in6 *)From)->sin6_port = htons(Localfrom.Port);
+                            inet_pton(From->sa_family, Localfrom.Plainaddress, &((struct sockaddr_in6 *)From)->sin6_addr);
+                        }
+                        else
+                        {
+                            From->sa_family = AF_INET;
+                            ((struct sockaddr_in *)From)->sin_port = htons(Localfrom.Port);
+                            inet_pton(From->sa_family, Localfrom.Plainaddress, &((struct sockaddr_in *)From)->sin_addr);
+                        }
+                    }
+
+                    // Copy the data to the buffer and return how much was copied.
+                    std::memcpy(Buffer, Packet.data(), std::min(size_t(Length), Packet.size()));
+                    return std::min(size_t(Length), Packet.size());
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            } while (Blockingsockets[Socket]);
+
+            // Send an error if there's no data.
+            WSASetLastError(WSAEWOULDBLOCK);
+            return -1;
+        }
+
+        // Ask Windows to fetch some data from the socket if it's not managed by us.
+        CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
         if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
@@ -263,7 +271,7 @@ namespace Winsock
         std::vector<size_t> Readsockets;
         std::vector<size_t> Writesockets;
 
-        for (auto &Item : Activesockets())
+        for (auto &Item : Localnetworking::Activesockets())
         {
             if (Readfds)
             {
@@ -323,63 +331,113 @@ namespace Winsock
     }
     int __stdcall Send(size_t Socket, const char *Buffer, int Length, int Flags)
     {
-        IServer *Server = Findserver(Socket);
-        if (!Server) CALLWS(send, &Length, Socket, Buffer, Length, Flags);
+        bool Successful = false;
+        uint32_t Result = Length;
 
-        if (Server)
+        // Pointer checking because few professional game-developers know their shit.
+        if (!Buffer)
         {
-            if (Server->Capabilities() & ISERVER_EXTENDED)
-            {
-                IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
-
-                if(false == ServerEx->onWriterequestEx(Socket, Buffer, Length))
-                    return int(-1);
-            }
-            else
-            {
-                if(false == Server->onWriterequest(Buffer, Length))
-                    return int(-1);
-            }
+            WSASetLastError(EFAULT);
+            return -1;
         }
 
-        // Debug information.
-        Debugprint(va("Sending %i bytes to server %s", Length, Server ? Findaddress(Socket).c_str() : va("external (socket %X)", Socket).c_str()));
-        return Length;
+        // Find a server associated with this socket and send.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (Server)
+        {
+            // Notify the developer that they'll have to deal with this.
+            if (Flags)
+            {
+                static bool Hasprinted = false;
+                if (!Hasprinted)
+                {
+                    Hasprinted = true;
+                    Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
+                        "##############################################################",
+                        "The current application is using special flags for Send.",
+                        "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                        "Or just hack it into your module.",
+                        "##############################################################"));
+                }
+            }
+
+            // If we are on a blocking socket, poll until successful.
+            do
+            {
+                Successful = Server->onStreamwrite(Socket, Buffer, Result);
+                if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            } while (!Successful && Blockingsockets[Socket]);
+        }
+
+        // Ask Windows to send the data from the socket if it's not ours.
+        if (!Server) CALLWS(send, &Result, Socket, Buffer, Length, Flags);
+
+        // Return the length or error.
+        if (Server && !Successful) return -1;
+        if (Result == uint32_t(-1)) return -1;
+        return std::min(Result, uint32_t(INT32_MAX));
     }
     int __stdcall Sendto(size_t Socket, const char *Buffer, int Length, int Flags, const struct sockaddr *To, int Tolength)
     {
-        IServer *Server = Findserver(Socket);
-        if (!Server) Server = Findserver(Plainaddress(To));
-        if (!Server) Server = Createserver(Socket, Plainaddress(To));
-        if (!Server) CALLWS(sendto, &Length, Socket, Buffer, Length, Flags, To, Tolength);
-        if (Server) Datagramservers[Server] = true;
+        bool Successful = false;
+        uint32_t Result = Length;
 
-        if (Server)
+        // Pointer checking because few professional game-developers know their shit.
+        if (!Buffer || !To)
         {
-            // Create the hostinfo for recvfrom.
-            Hostinfo[Server] = { (char *)To, size_t(Tolength) };
-
-            if (Server->Capabilities() & ISERVER_EXTENDED)
-            {
-                IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
-
-                if(false == ServerEx->onWriterequestEx(Socket, Buffer, Length))
-                    return int(-1);
-            }
-            else
-            {
-                if(false == Server->onWriterequest(Buffer, Length))
-                    return int(-1);
-            }
+            WSASetLastError(EFAULT);
+            return -1;
         }
 
-        // Debug information.
-        Debugprint(va("Sending %i bytes to server %s:%u", Length, !Server ? Plainaddress(To).c_str() : "Internal", To->sa_family == AF_INET6 ? ntohs(((sockaddr_in6 *)To)->sin6_port) : ntohs(((sockaddr_in *)To)->sin_port)));
-        return Length;
+        // Find a server associated with this socket or address.
+        auto Server = Localnetworking::Findserver(Plainaddress(To));
+        if (!Server) Server = Localnetworking::Findserver(Socket);
+        if (Server)
+        {
+            // Notify the developer that they'll have to deal with this.
+            if (Flags)
+            {
+                static bool Hasprinted = false;
+                if (!Hasprinted)
+                {
+                    Hasprinted = true;
+                    Infoprint(va("\n%s\n%s\n%s\n%s\n%s",
+                        "##############################################################",
+                        "The current application is using special flags for Sendto.",
+                        "Feel free to implement that in Localnetworking/Winsock.cpp.",
+                        "Or just hack it into your module.",
+                        "##############################################################"));
+                }
+            }
+
+            // Associate the socket if we haven't.
+            Localnetworking::Associatesocket(Server, Socket);
+            Localnetworking::Addfilter(Socket, Localaddress(To));
+
+            // Convert to the universal representation.
+            auto Address = Localaddress(To);
+
+            // If we are on a blocking socket, poll until successful.
+            do
+            {
+                Successful = Server->onPacketwrite(Address, Buffer, Result);
+                if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            } while (!Successful && Blockingsockets[Socket]);
+        }
+
+        // Ask Windows to send the data from the socket if it's not ours.
+        if (!Server) CALLWS(sendto, &Result, Socket, Buffer, Length, Flags, To, Tolength);
+
+        // Return the length or error.
+        if (Server && !Successful) return -1;
+        if (Result == uint32_t(-1)) return -1;
+        return std::min(Result, uint32_t(INT32_MAX));
     }
+
     hostent *__stdcall Gethostbyname(const char *Hostname)
     {
-        IServer *Server = Createserver(Hostname);
+        // Create a server from the hostname, or ask Windows for it.
+        auto Server = Localnetworking::Createserver(Hostname);
         if (!Server)
         {
             static hostent *Resolvedhost;
@@ -389,17 +447,23 @@ namespace Winsock
             return Resolvedhost;
         }
 
-        // Create a fake IP from the hostname.
-        uint32_t IPv4 = Hash::FNV1a_32(Hostname);
-        uint8_t *IP = (uint8_t *)&IPv4;
+        // Create a fake IP address from the hostname.
+        uint32_t IPHash = Hash::FNV1a_32(Hostname);
+        uint8_t *IP = (uint8_t *)&IPHash;
 
-        // Create the address struct.
+        // Associate the server instance with the fake IP address we created.
+        auto ReadableIP = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
+        Localnetworking::Associateaddress(ReadableIP, Hostname);
+        Localnetworking::Emplaceserver(ReadableIP, Server);
+
+        // Create the Winsock address struct.
         in_addr *Localaddress = new in_addr();
         in_addr *LocalsocketAddresslist[2];
-        Localaddress->S_un.S_addr = inet_addr(va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]).c_str());
+        Localaddress->S_un.S_addr = inet_addr(ReadableIP.c_str());
         LocalsocketAddresslist[0] = Localaddress;
         LocalsocketAddresslist[1] = nullptr;
 
+        // Create the Winsock hostentry struct.
         hostent *Localhost = new hostent();
         Localhost->h_aliases = NULL;
         Localhost->h_addrtype = AF_INET;
@@ -407,54 +471,68 @@ namespace Winsock
         Localhost->h_name = const_cast<char *>(Hostname);
         Localhost->h_addr_list = (char **)LocalsocketAddresslist;
 
+        // Notify the developer about this event.
         Debugprint(va("%s: \"%s\" -> %s", __func__, Hostname, inet_ntoa(*(in_addr*)Localhost->h_addr_list[0])));
         return Localhost;
     }
     int __stdcall Getaddrinfo(const char *Nodename, const char *Servicename, ADDRINFOA *Hints, ADDRINFOA **Result)
     {
         int WSResult = 0;
-        IServer *Server = Createserver(Nodename);
 
-        // Resolve the hostname through winsock to allocate the result struct.
+        // Create a server from the hostname, or ask Windows for it.
+        auto Server = Localnetworking::Createserver(Nodename);
+
+        // Resolve the hostname through Winsock to allocate the result struct.
         if (Hints) Hints->ai_family = PF_INET;
-        if (!Server) CALLWS(getaddrinfo, &WSResult, Nodename, Servicename, Hints, Result);
+        CALLWS(getaddrinfo, &WSResult, Nodename, Servicename, Hints, Result);
 
-        // Modify the structure to match our serverinfo.
+        // Modify the allocated structure to match our server.
         if (Server)
         {
-            // Resolve a known hostname if the previous call failed.
+            // Resolve a known host if the previous call failed.
             if (0 != WSResult) CALLWS(getaddrinfo, &WSResult, "localhost", nullptr, Hints, Result);
             if (0 != WSResult) return WSResult;
 
-            // Create a fake IP from the hostname.
-            uint32_t IPv4 = Hash::FNV1a_32(Nodename);
-            uint8_t *IP = (uint8_t *)&IPv4;
+            // Create a fake IP address from the hostname.
+            uint32_t IPHash = Hash::FNV1a_32(Nodename);
+            uint8_t *IP = (uint8_t *)&IPHash;
+
+            // Associate the server instance with the fake IP address we created.
+            auto ReadableIP = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
+            Localnetworking::Associateaddress(ReadableIP, Nodename);
+            Localnetworking::Emplaceserver(ReadableIP, Server);
 
             // Set the IP for all records.
             for (ADDRINFOA *ptr = *Result; ptr != NULL; ptr = ptr->ai_next)
             {
-                ((sockaddr_in *)ptr->ai_addr)->sin_addr.S_un.S_addr = inet_addr(va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]).c_str());
+                ((sockaddr_in *)ptr->ai_addr)->sin_addr.S_un.S_addr = inet_addr(ReadableIP.c_str());
             }
         }
 
+        // Notify the developer about this event.
         Debugprint(va("%s: \"%s\" -> %s", __func__, Nodename, inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)));
         return WSResult;
     }
     int __stdcall Getpeername(size_t Socket, struct sockaddr *Name, int *Namelength)
     {
         int Result = 0;
-        IServer *Server = Findserver(Socket);
-        if(!Server) CALLWS(getpeername, &Result, Socket, Name, Namelength);
 
-        // For our servers we just return the IP.
+        // Find a server associated with this socket.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (!Server) CALLWS(getpeername, &Result, Socket, Name, Namelength);
         if (Server)
         {
+            // Create a fake address.
             sockaddr_in *Localname = reinterpret_cast<sockaddr_in *>(Name);
             *Namelength = sizeof(sockaddr_in);
 
-            Localname->sin_family = AF_INET;
+            auto Hostname = Localnetworking::Findhostname(Server);
+            auto Address = inet_addr(Hostname.c_str());
+            if (!Address) Address = Hash::FNV1a_32(Hostname.c_str());
+
             Localname->sin_port = 0;
-            Localname->sin_addr.S_un.S_addr = inet_addr(Findaddress(Server).c_str());
+            Localname->sin_family = AF_INET;
+            Localname->sin_addr.S_un.S_addr = Address;
         }
 
         return Result;
@@ -462,50 +540,43 @@ namespace Winsock
     int __stdcall Getsockname(size_t Socket, struct sockaddr *Name, int *Namelength)
     {
         int Result = 0;
-        IServer *Server = Findserver(Socket);
-        if(!Server) CALLWS(getsockname, &Result, Socket, Name, Namelength);
 
-        // For our servers we just return a fake IP.
+        // Find a server associated with this socket.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (!Server) CALLWS(getsockname, &Result, Socket, Name, Namelength);
         if (Server)
         {
+            // Create a fake address.
             sockaddr_in *Localname = reinterpret_cast<sockaddr_in *>(Name);
             *Namelength = sizeof(sockaddr_in);
-            uint8_t *IP = (uint8_t *)&Socket;
 
-            Localname->sin_family = AF_INET;
+            auto Hostname = Localnetworking::Findhostname(Server);
+            auto Address = inet_addr(Hostname.c_str());
+            if (!Address) Address = Hash::FNV1a_32(Hostname.c_str());
+
             Localname->sin_port = 0;
-            Localname->sin_addr.S_un.S_addr = inet_addr(va("%u.%u.%u.%u", 192, 168, IP[2], IP[3]).c_str());
+            Localname->sin_family = AF_INET;
+            Localname->sin_addr.S_un.S_addr = Address;
         }
 
         return Result;
     }
     int __stdcall Closesocket(size_t Socket)
     {
-        IServer *Server = Findserver(Socket);
+        // Find a server associated with this socket and disconnect it.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (Server) Server->onDisconnect(Socket);
         CALLWS_NORET(closesocket, Socket);
-        Disconnectserver(Socket);
 
-        if (Server) Datagramservers[Server] = false;
-        Anyserver[Socket] = false;
-
-        if (Server && Server->Capabilities() & ISERVER_EXTENDED)
-        {
-            IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
-            ServerEx->onDisconnect(Socket);
-        }
         return 0;
     }
     int __stdcall Shutdown(size_t Socket, int How)
     {
-        IServer *Server = Findserver(Socket);
+        // Find a server associated with this socket and disconnect it.
+        auto Server = Localnetworking::Findserver(Socket);
+        if (Server) Server->onDisconnect(Socket);
         CALLWS_NORET(shutdown, Socket, How);
 
-        if (SD_BOTH == How) Disconnectserver(Socket);
-        if (Server && Server->Capabilities() & ISERVER_EXTENDED)
-        {
-            IServerEx *ServerEx = reinterpret_cast<IServerEx *>(Server);
-            ServerEx->onDisconnect(Socket);
-        }
         return 0;
     }
 

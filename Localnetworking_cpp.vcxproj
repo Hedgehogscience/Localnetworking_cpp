@@ -74,6 +74,8 @@
     <TargetExt>.ayria$(PlatformArchitecture)</TargetExt>
     <UseMultiToolTask>true</UseMultiToolTask>
     <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(ProjectDir)Bin\</OutDir>
@@ -81,6 +83,8 @@
     <TargetExt>.ayria$(PlatformArchitecture)</TargetExt>
     <UseMultiToolTask>true</UseMultiToolTask>
     <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(ProjectDir)Bin\</OutDir>
@@ -88,6 +92,8 @@
     <TargetExt>.ayria$(PlatformArchitecture)</TargetExt>
     <UseMultiToolTask>true</UseMultiToolTask>
     <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(ProjectDir)Bin\</OutDir>
@@ -95,6 +101,8 @@
     <TargetExt>.ayria$(PlatformArchitecture)</TargetExt>
     <UseMultiToolTask>true</UseMultiToolTask>
     <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -104,6 +112,8 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <MinimalRebuild>false</MinimalRebuild>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <EnablePREfast>false</EnablePREfast>
     </ClCompile>
     <Link>
       <AdditionalDependencies>ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -121,6 +131,8 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <MinimalRebuild>false</MinimalRebuild>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <EnablePREfast>false</EnablePREfast>
     </ClCompile>
     <Link>
       <AdditionalDependencies>ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -139,6 +151,8 @@
       <SDLCheck>true</SDLCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <EnablePREfast>false</EnablePREfast>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -159,6 +173,8 @@
       <SDLCheck>true</SDLCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <EnablePREfast>false</EnablePREfast>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -174,10 +190,10 @@
     <ClInclude Include="Source\Configuration\Defines.h" />
     <ClInclude Include="Source\Configuration\Macros.h" />
     <ClInclude Include="Source\Configuration\Warnings.h" />
-    <ClInclude Include="Source\Servers\Interfaces\IDatagramserver.h" />
-    <ClInclude Include="Source\Servers\Interfaces\IServer.h" />
-    <ClInclude Include="Source\Servers\Interfaces\IStreamserver.h" />
-    <ClInclude Include="Source\Servers\Servers.h" />
+    <ClInclude Include="Source\Localnetworking\Interfaces\IDatagramserver.h" />
+    <ClInclude Include="Source\Localnetworking\Interfaces\IServer.h" />
+    <ClInclude Include="Source\Localnetworking\Interfaces\IStreamserver.h" />
+    <ClInclude Include="Source\Localnetworking\Localnetworking.h" />
     <ClInclude Include="Source\Stdinclude.h" />
     <ClInclude Include="Source\Utility\Binary\Hooking.h" />
     <ClInclude Include="Source\Utility\Binary\Memprotect.h" />
@@ -185,18 +201,24 @@
     <ClInclude Include="Source\Utility\Cryptography\FNV1Hash.h" />
     <ClInclude Include="Source\Utility\Data\Base64.h" />
     <ClInclude Include="Source\Utility\Data\Bytebuffer.h" />
+    <ClInclude Include="Source\Utility\Data\PackageFS.h" />
     <ClInclude Include="Source\Utility\Data\SystemIO.h" />
+    <ClInclude Include="Source\Utility\Data\zip_file.hpp" />
     <ClInclude Include="Source\Utility\Text\Logfile.h" />
     <ClInclude Include="Source\Utility\Text\Variadicstring.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Appmain.cpp" />
+    <ClCompile Include="Source\Localnetworking\Servermanager.cpp" />
     <ClCompile Include="Source\Platforms\Winsock.cpp" />
-    <ClCompile Include="Source\Servers\Servermanager.cpp" />
     <ClCompile Include="Source\Utility\Binary\Hooking.cpp" />
     <ClCompile Include="Source\Utility\Binary\Memprotect.cpp" />
     <ClCompile Include="Source\Utility\Binary\Patternscan.cpp" />
     <ClCompile Include="Source\Utility\Data\Bytebuffer.cpp" />
+    <ClCompile Include="Source\Utility\Data\PackageFS.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Localnetworking_cpp.licenseheader" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

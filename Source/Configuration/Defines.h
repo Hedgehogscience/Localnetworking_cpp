@@ -37,6 +37,7 @@
 
 // The name that will be used in default functions.
 #define MODULENAME "Localnetworking"
+#define MODULEEXTENSION "LNmodule"
 
 // Disable windows annoyance.
 #if defined (_WIN32)
