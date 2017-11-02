@@ -237,11 +237,11 @@ namespace Localnetworking
             for(auto &Instance : Serverinstances)
             {
                 Buffersize = 10240;
-                IPAddress_t Clientaddress;
-                if(Instance.second->onPacketread(Clientaddress, Buffer.get(), &Buffersize))
+                IPAddress_t Serveraddress;
+                if(Instance.second->onPacketread(Serveraddress, Buffer.get(), &Buffersize))
                 {
                     auto Packet = std::string(Buffer.get(), Buffersize);
-                    Enqueueframe(Clientaddress, Packet);
+                    Enqueueframe(Serveraddress, Packet);
                 }
             }
         }
