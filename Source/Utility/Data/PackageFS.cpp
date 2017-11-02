@@ -74,7 +74,7 @@ namespace Package
     void Write(Archivehandle &Handle, std::string Filename, std::string &Buffer)
     {
         auto Archive = reinterpret_cast<miniz_cpp::zip_file *>(Handle);
-        Delete(Handle, Filename);
+        //Delete(Handle, Filename); // Currently broken.
 
         Archive->writestr(Filename, Buffer);
         Savearchive(Handle, Archive->get_filename());
