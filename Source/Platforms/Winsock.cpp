@@ -65,7 +65,7 @@ namespace Winsock
     }
     IPAddress_t Localaddress(const struct sockaddr *Sockaddr)
     {
-        IPAddress_t Result;
+        IPAddress_t Result{};
         Result.Port = WSPort(Sockaddr);
         auto Address = Plainaddress(Sockaddr);
         std::memcpy(Result.Plainaddress, Address.c_str(), Address.size());
@@ -198,7 +198,7 @@ namespace Winsock
         uint32_t Result;
 
         // Pointer checking because few professional game-developers know their shit.
-        if (!Buffer || !From)
+        if (!Buffer)
         {
             WSASetLastError(EFAULT);
             return -1;
@@ -231,15 +231,20 @@ namespace Winsock
                     }
 
                     // Copy the sender information.
-                    if (From->sa_family == AF_INET6)
+                    if (From && Fromlength)
                     {
-                        inet_pton(From->sa_family, Localfrom.Plainaddress, &((struct sockaddr_in6 *)From)->sin6_addr);
-                        ((struct sockaddr_in6 *)From)->sin6_port = Localfrom.Port;
-                    }
-                    else
-                    {
-                        inet_pton(From->sa_family, Localfrom.Plainaddress, &((struct sockaddr_in *)From)->sin_addr);
-                        ((struct sockaddr_in *)From)->sin_port = Localfrom.Port;
+                        if (*Fromlength == sizeof(sockaddr_in6))
+                        {
+                            From->sa_family = AF_INET6;
+                            ((struct sockaddr_in6 *)From)->sin6_port = htons(Localfrom.Port);
+                            inet_pton(From->sa_family, Localfrom.Plainaddress, &((struct sockaddr_in6 *)From)->sin6_addr);
+                        }
+                        else
+                        {
+                            From->sa_family = AF_INET;
+                            ((struct sockaddr_in *)From)->sin_port = htons(Localfrom.Port);
+                            inet_pton(From->sa_family, Localfrom.Plainaddress, &((struct sockaddr_in *)From)->sin_addr);
+                        }
                     }
 
                     // Copy the data to the buffer and return how much was copied.
@@ -249,10 +254,15 @@ namespace Winsock
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             } while (Blockingsockets[Socket]);
+
+            // Send an error if there's no data.
+            WSASetLastError(WSAEWOULDBLOCK);
+            return -1;
         }
 
         // Ask Windows to fetch some data from the socket if it's not managed by us.
         CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
+        if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
     int __stdcall Select(int fdsCount, fd_set *Readfds, fd_set *Writefds, fd_set *Exceptfds, timeval *Timeout)
@@ -379,7 +389,7 @@ namespace Winsock
             return -1;
         }
 
-        // Find a server associated with this socket aor address.
+        // Find a server associated with this socket or address.
         auto Server = Localnetworking::Findserver(Plainaddress(To));
         if (!Server) Server = Localnetworking::Findserver(Socket);
         if (Server)
@@ -399,6 +409,10 @@ namespace Winsock
                         "##############################################################"));
                 }
             }
+
+            // Associate the socket if we haven't.
+            Localnetworking::Associatesocket(Server, Socket);
+            Localnetworking::Addfilter(Socket, Localaddress(To));
 
             // Convert to the universal representation.
             auto Address = Localaddress(To);
