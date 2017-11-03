@@ -249,7 +249,7 @@ namespace Winsock
 
                     // Copy the data to the buffer and return how much was copied.
                     std::memcpy(Buffer, Packet.data(), std::min(size_t(Length), Packet.size()));
-                    return std::min(size_t(Length), Packet.size());
+                    return std::min(uint32_t(std::min(size_t(Length), Packet.size())), uint32_t(INT32_MAX));
                 }
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
