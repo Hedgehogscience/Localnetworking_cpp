@@ -57,15 +57,18 @@ extern "C"
         {
             case Hash::FNV1a_32(MODULENAME "_Enqueueframe"):
             {
-                // Check that there's enough data.
-                if (Messagesize < sizeof(IPAddress_t))
-                    break;
+                std::vector<uint8_t> Packetdata;
+                std::string Plainaddress{};
+                IPAddress_t Fromaddress{};
 
-                IPAddress_t Fromaddress;
-                std::memcpy(&Fromaddress, Messagedata, sizeof(IPAddress_t));
-                std::string Packet((char *)Messagedata + sizeof(IPAddress_t), Messagesize - sizeof(IPAddress_t));
+                Bytebuffer Reader(std::string((char *)Messagedata, Messagesize));
+                Reader.Read(Fromaddress.Port);
+                Reader.Read(Plainaddress);
+                Reader.Read(Packetdata);
 
-                Localnetworking::Enqueueframe(Fromaddress, Packet);
+                std::memcpy(Fromaddress.Plainaddress, Plainaddress.c_str(), Plainaddress.size());
+                std::string Data{ Packetdata.begin(), Packetdata.end() };
+                Localnetworking::Enqueueframe(Fromaddress, Data);
                 break;
             }
 
