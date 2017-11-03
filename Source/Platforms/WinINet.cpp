@@ -23,6 +23,7 @@ namespace Wininet
     {
         std::vector<std::string> Headers;
         std::string Useragent;
+        std::string Hostname;
         std::string Username;
         std::string Password;
         std::string Location;
@@ -84,6 +85,7 @@ namespace Wininet
     size_t __stdcall InternetconnectA(const size_t hInternet, LPCSTR lpszServerName, uint16_t nServerPort, LPCSTR lpszUserName, LPCSTR lpszPassword, DWORD dwService, DWORD dwFlags, DWORD_PTR dwContext)
     {
         // Resolve the host.
+        Activerequests[hInternet].Hostname = lpszServerName;
         auto Hostname = gethostbyname(lpszServerName);
         if (Hostname == NULL) return NULL;
 
@@ -155,8 +157,93 @@ namespace Wininet
         Activerequests[hRequest].Headers.push_back({ Temporary.begin(), Temporary.end() });
         return TRUE;
     }
+    BOOL __stdcall HTTPSendrequestExA(const size_t hRequest, LPINTERNET_BUFFERSA lpBuffersIn, LPINTERNET_BUFFERSA lpBuffersOut, DWORD dwFlags, DWORD_PTR dwContext)
+    {
+        /*
+            NOTE(Convery):
+            MSDN says that dwFlags is a reserved variable and must be zero.
+            But wininet.h lists a number of flags and HSR_INITIATE has been
+            observed in a number of modern AAA games.
+        */
 
-#pragma endregion
+        // Create the request.
+        std::string HTTPRequest;
+        HTTPRequest += va("%s %s %s\r\n",
+            Activerequests[hRequest].Method.c_str(),
+            Activerequests[hRequest].Location.c_str(),
+            Activerequests[hRequest].Version.c_str());
+        HTTPRequest += va("User-Agent: %s\r\n",
+            Activerequests[hRequest].Useragent.c_str());
+        for (auto &Item : Activerequests[hRequest].Headers)
+            HTTPRequest += va("%s\r\n", Item.c_str());
+        HTTPRequest += "\r\n";
+
+        // Send to winsock that forwards it to the server.
+        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), HTTPRequest.size(), NULL);
+
+        return TRUE;
+    }
+    BOOL __stdcall HTTPSendrequestExW(const size_t hRequest, LPINTERNET_BUFFERSW lpBuffersIn, LPINTERNET_BUFFERSW lpBuffersOut, DWORD dwFlags, DWORD_PTR dwContext)
+    {
+        /*
+            NOTE(Convery):
+            MSDN says that dwFlags is a reserved variable and must be zero.
+            But wininet.h lists a number of flags and HSR_INITIATE has been
+            observed in a number of modern AAA games.
+        */
+
+        // Create the request.
+        std::string HTTPRequest;
+        HTTPRequest += va("%s %s %s\r\n",
+            Activerequests[hRequest].Method.c_str(),
+            Activerequests[hRequest].Location.c_str(),
+            Activerequests[hRequest].Version.c_str());
+        HTTPRequest += va("User-Agent: %s\r\n",
+            Activerequests[hRequest].Useragent.c_str());
+        for (auto &Item : Activerequests[hRequest].Headers)
+            HTTPRequest += va("%s\r\n", Item.c_str());
+        HTTPRequest += "\r\n";
+
+        // Send to winsock that forwards it to the server.
+        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), HTTPRequest.size(), NULL);
+
+        return TRUE;
+    }
+
+    BOOL __stdcall InternetQueryoptionA(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, LPDWORD lpdwBufferLength)
+    {
+        /*
+            TODO(Convery):
+            We may want to actually implement this.
+        */
+        return TRUE;
+    }
+    BOOL __stdcall InternetQueryoptionW(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, LPDWORD lpdwBufferLength)
+    {
+        /*
+            TODO(Convery):
+            We may want to actually implement this.
+        */
+        return TRUE;
+    }
+    BOOL __stdcall InternetSetoptionA(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, DWORD dwBufferLength)
+    {
+        /*
+            TODO(Convery):
+            We may want to actually implement this.
+        */
+        return TRUE;
+    }
+    BOOL __stdcall InternetSetoptionW(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, DWORD dwBufferLength)
+    {
+        /*
+            TODO(Convery):
+            We may want to actually implement this.
+        */
+        return TRUE;
+    }
+
+    #pragma endregion
 
     #pragma region Installer
     struct INETInstaller
@@ -185,6 +272,15 @@ namespace Wininet
             INSTALL_HOOK("HttpOpenRequestW", HTTPOpenrequestW);
             INSTALL_HOOK("HttpAddRequestHeadersA", HTTPAddrequestheadersA);
             INSTALL_HOOK("HttpAddRequestHeadersW", HTTPAddrequestheadersW);
+
+            INSTALL_HOOK("HttpSendRequestExA", HTTPSendrequestExA);
+            INSTALL_HOOK("HttpSendRequestExW", HTTPSendrequestExA);
+
+            INSTALL_HOOK("InternetQueryOptionA", InternetQueryoptionA);
+            INSTALL_HOOK("InternetQueryOptionW", InternetQueryoptionW);
+
+            INSTALL_HOOK("InternetSetOptionA", InternetSetoptionA);
+            INSTALL_HOOK("InternetSetOptionW", InternetSetoptionW);
         }
     };
 
