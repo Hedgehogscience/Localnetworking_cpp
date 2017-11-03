@@ -21,6 +21,7 @@ namespace Wininet
 {
     struct Internetrequest
     {
+        std::vector<std::string> Headers;
         std::string Useragent;
         std::string Username;
         std::string Password;
@@ -142,6 +143,19 @@ namespace Wininet
 
         return HTTPOpenrequestA(hConnect, Method.c_str(), Location.c_str(), Version.c_str(), Referrer.c_str(), { NULL }, dwFlags, dwContext);
     }
+    BOOL __stdcall HTTPAddrequestheadersA(const size_t hRequest, LPCSTR lpszHeaders, DWORD dwHeadersLength, DWORD dwModifiers)
+    {
+        Activerequests[hRequest].Headers.push_back(lpszHeaders);
+        return TRUE;
+    }
+    BOOL __stdcall HTTPAddrequestheadersW(const size_t hRequest, LPCWSTR lpszHeaders, DWORD dwHeadersLength, DWORD dwModifiers)
+    {
+        std::wstring Temporary = lpszHeaders;
+
+        Activerequests[hRequest].Headers.push_back({ Temporary.begin(), Temporary.end() });
+        return TRUE;
+    }
+
 #pragma endregion
 
     #pragma region Installer
@@ -169,6 +183,8 @@ namespace Wininet
             INSTALL_HOOK("InternetAttemptConnect", InternetAttemptconnect);
             INSTALL_HOOK("HttpOpenRequestA", HTTPOpenrequestA);
             INSTALL_HOOK("HttpOpenRequestW", HTTPOpenrequestW);
+            INSTALL_HOOK("HttpAddRequestHeadersA", HTTPAddrequestheadersA);
+            INSTALL_HOOK("HttpAddRequestHeadersW", HTTPAddrequestheadersW);
         }
     };
 
