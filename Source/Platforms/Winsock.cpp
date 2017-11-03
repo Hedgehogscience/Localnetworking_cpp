@@ -579,6 +579,14 @@ namespace Winsock
 
         return 0;
     }
+    hostent *__stdcall Gethostbyaddr(const char *Address, int Addresslength, int Addresstype)
+    {
+        sockaddr Localaddress;
+        Localaddress.sa_family = Addresstype;
+        std::memcpy(Localaddress.sa_data, Address, Addresslength);
+
+        return Gethostbyname(Plainaddress(&Localaddress).c_str());
+    }
 
     /*
         TODO(Convery):
@@ -620,6 +628,7 @@ namespace Winsock
             INSTALL_HOOK("getsockname", Getsockname);
             INSTALL_HOOK("closesocket", Closesocket);
             INSTALL_HOOK("shutdown", Shutdown);
+            INSTALL_HOOK("gethostbyaddr", Gethostbyaddr);
         }
     };
 
