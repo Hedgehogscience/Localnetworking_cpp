@@ -222,7 +222,7 @@ namespace Wininet
         for (auto &Item : Activerequests[hRequest].Headers)
             HTTPRequest += va("%s\r\n", Item.c_str());
         if(lpszHeaders)
-            HTTPRequest += va("%s\r\n", std::string(lpszHeaders, dwHeadersLength).c_str());
+            HTTPRequest += va("%s", std::string(lpszHeaders, dwHeadersLength).c_str());
         HTTPRequest += "\r\n";
 
         // Create the body.
