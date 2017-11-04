@@ -288,6 +288,17 @@ namespace Wininet
         *lpdwNumberOfBytesWritten = Result;
         return TRUE;
     }
+    BOOL __stdcall InternetReadfile(const size_t hFile, LPCVOID lpBuffer, DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead)
+    {
+        // Legacy functionality.
+        *lpdwNumberOfBytesRead = 0;
+
+        auto Result = recv(Activerequests[hFile].Socket, (char *)lpBuffer, dwNumberOfBytesToRead, 0);
+        if (Result == -1) return FALSE;
+
+        *lpdwNumberOfBytesRead = Result;
+        return TRUE;
+    }
 
     #pragma endregion
 
@@ -327,6 +338,7 @@ namespace Wininet
             INSTALL_HOOK("HttpSendRequestA", HTTPSendrequestA);
             INSTALL_HOOK("HttpSendRequestW", HTTPSendrequestW);
             INSTALL_HOOK("InternetWriteFile", InternetWritefile);
+            INSTALL_HOOK("InternetReadFile", InternetReadfile);
         }
     };
 
