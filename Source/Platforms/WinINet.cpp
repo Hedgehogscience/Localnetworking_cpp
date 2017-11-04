@@ -277,6 +277,18 @@ namespace Wininet
         return TRUE;
     }
 
+    BOOL __stdcall InternetWritefile(const size_t hFile, LPCVOID lpBuffer, DWORD dwNumberOfBytesToWrite, LPDWORD lpdwNumberOfBytesWritten)
+    {
+        // Legacy functionality.
+        *lpdwNumberOfBytesWritten = 0;
+
+        auto Result = send(Activerequests[hFile].Socket, (char *)lpBuffer, dwNumberOfBytesToWrite, NULL);
+        if (-1 == Result) return FALSE;
+
+        *lpdwNumberOfBytesWritten = Result;
+        return TRUE;
+    }
+
     #pragma endregion
 
     #pragma region Installer
@@ -306,18 +318,15 @@ namespace Wininet
             INSTALL_HOOK("HttpOpenRequestW", HTTPOpenrequestW);
             INSTALL_HOOK("HttpAddRequestHeadersA", HTTPAddrequestheadersA);
             INSTALL_HOOK("HttpAddRequestHeadersW", HTTPAddrequestheadersW);
-
             INSTALL_HOOK("HttpSendRequestExA", HTTPSendrequestExA);
             INSTALL_HOOK("HttpSendRequestExW", HTTPSendrequestExA);
-
             INSTALL_HOOK("InternetQueryOptionA", InternetQueryoptionA);
             INSTALL_HOOK("InternetQueryOptionW", InternetQueryoptionW);
-
             INSTALL_HOOK("InternetSetOptionA", InternetSetoptionA);
             INSTALL_HOOK("InternetSetOptionW", InternetSetoptionW);
-
             INSTALL_HOOK("HttpSendRequestA", HTTPSendrequestA);
-            INSTALL_HOOK("HttpSendRequestW", HTTPSendrequestA);
+            INSTALL_HOOK("HttpSendRequestW", HTTPSendrequestW);
+            INSTALL_HOOK("InternetWriteFile", InternetWritefile);
         }
     };
 
