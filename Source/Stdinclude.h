@@ -23,6 +23,7 @@
 #include <memory>
 #include <chrono>
 #include <thread>
+#include <atomic>
 #include <mutex>
 #include <ctime>
 #include <queue>

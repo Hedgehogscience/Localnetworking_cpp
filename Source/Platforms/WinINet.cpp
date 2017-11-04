@@ -209,6 +209,40 @@ namespace Wininet
 
         return TRUE;
     }
+    BOOL __stdcall HTTPSendrequestA(const size_t hRequest, LPCSTR lpszHeaders, DWORD dwHeadersLength, LPVOID lpOptional, DWORD dwOptionalLength)
+    {
+        // Create the request.
+        std::string HTTPRequest;
+        HTTPRequest += va("%s %s %s\r\n",
+            Activerequests[hRequest].Method.c_str(),
+            Activerequests[hRequest].Location.c_str(),
+            Activerequests[hRequest].Version.c_str());
+        HTTPRequest += va("User-Agent: %s\r\n",
+            Activerequests[hRequest].Useragent.c_str());
+        for (auto &Item : Activerequests[hRequest].Headers)
+            HTTPRequest += va("%s\r\n", Item.c_str());
+        if(lpszHeaders)
+            HTTPRequest += va("%s\r\n", std::string(lpszHeaders, dwHeadersLength).c_str());
+        HTTPRequest += "\r\n";
+
+        // Create the body.
+        if (lpOptional && dwOptionalLength != NULL)
+            HTTPRequest.append((char *)lpOptional, dwOptionalLength);
+
+        // Send to winsock that forwards it to the server.
+        send(Activerequests[hRequest].Socket, HTTPRequest.data(), HTTPRequest.size(), NULL);
+
+        return TRUE;
+    }
+    BOOL __stdcall HTTPSendrequestW(const size_t hRequest, LPCWSTR lpszHeaders, DWORD dwHeadersLength, LPVOID lpOptional, DWORD dwOptionalLength)
+    {
+        if (!lpszHeaders) return HTTPSendrequestA(hRequest, nullptr, 0, lpOptional, dwOptionalLength);
+
+        std::wstring Temporary = lpszHeaders;
+        std::string Headers = { Temporary.begin(), Temporary.end() };
+
+        return HTTPSendrequestA(hRequest, Headers.c_str(), Headers.size(), lpOptional, dwOptionalLength);
+    }
 
     BOOL __stdcall InternetQueryoptionA(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, LPDWORD lpdwBufferLength)
     {
@@ -281,6 +315,9 @@ namespace Wininet
 
             INSTALL_HOOK("InternetSetOptionA", InternetSetoptionA);
             INSTALL_HOOK("InternetSetOptionW", InternetSetoptionW);
+
+            INSTALL_HOOK("HttpSendRequestA", HTTPSendrequestA);
+            INSTALL_HOOK("HttpSendRequestW", HTTPSendrequestA);
         }
     };
 
