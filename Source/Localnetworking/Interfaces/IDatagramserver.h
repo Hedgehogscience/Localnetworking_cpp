@@ -33,7 +33,7 @@ struct IDatagramserver : IServer
     {
         return Send({ reinterpret_cast<const char *>(Databuffer), Datasize });
     }
-    virtual void onData(const IPAddress_t &Server, const std::string &Packet) = 0;
+    virtual void onData(const std::string &Packet) = 0;
 
     // Returns false if the request could not be completed for any reason.
     virtual bool onPacketread(IPAddress_t &Server, void *Databuffer, uint32_t *Datasize)
