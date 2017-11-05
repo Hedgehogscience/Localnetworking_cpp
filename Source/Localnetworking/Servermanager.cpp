@@ -119,6 +119,12 @@ namespace Localnetworking
     void Addfilter(size_t Socket, IPAddress_t Filter)
     {
         auto Entry = &Filters[Socket];
+        for (auto &Item : *Entry)
+        {
+            if (std::strcmp(Item.Plainaddress, Filter.Plainaddress) == 0
+                && Item.Port == Filter.Port)
+                return;
+        }
         Entry->push_back(Filter);
     }
     std::vector<IPAddress_t> &Getfilters(size_t Socket)
@@ -127,7 +133,13 @@ namespace Localnetworking
     }
     void Associatesocket(IServer *Server, size_t Socket)
     {
-        Connectedsockets[Server].push_back(Socket);
+        auto Entry = &Connectedsockets[Server];
+        for (auto &Item : *Entry)
+        {
+            if (Item == Socket)
+                return;
+        }
+        Entry->push_back(Socket);
     }
     void Disassociatesocket(IServer *Server, size_t Socket)
     {

@@ -55,6 +55,23 @@ extern "C"
         // MessageID is a FNV1a_32 hash of a string.
         switch (MessageID)
         {
+            case Hash::FNV1a_32(MODULENAME "_Enqueueframe"):
+            {
+                std::vector<uint8_t> Packetdata;
+                std::string Plainaddress{};
+                IPAddress_t Fromaddress{};
+
+                Bytebuffer Reader(std::string((char *)Messagedata, Messagesize));
+                Reader.Read(Fromaddress.Port);
+                Reader.Read(Plainaddress);
+                Reader.Read(Packetdata);
+
+                std::memcpy(Fromaddress.Plainaddress, Plainaddress.c_str(), Plainaddress.size());
+                std::string Data{ Packetdata.begin(), Packetdata.end() };
+                Localnetworking::Enqueueframe(Fromaddress, Data);
+                break;
+            }
+
             case Hash::FNV1a_32(MODULENAME "_Default"):
             default: break;
         }

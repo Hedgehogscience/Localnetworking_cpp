@@ -249,7 +249,7 @@ namespace Winsock
 
                     // Copy the data to the buffer and return how much was copied.
                     std::memcpy(Buffer, Packet.data(), std::min(size_t(Length), Packet.size()));
-                    return std::min(size_t(Length), Packet.size());
+                    return std::min(uint32_t(std::min(size_t(Length), Packet.size())), uint32_t(INT32_MAX));
                 }
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -457,8 +457,8 @@ namespace Winsock
         Localnetworking::Emplaceserver(ReadableIP, Server);
 
         // Create the Winsock address struct.
-        in_addr *Localaddress = new in_addr();
-        in_addr *LocalsocketAddresslist[2];
+        auto Localaddress = new in_addr();
+        auto LocalsocketAddresslist = new in_addr*[2]();
         Localaddress->S_un.S_addr = inet_addr(ReadableIP.c_str());
         LocalsocketAddresslist[0] = Localaddress;
         LocalsocketAddresslist[1] = nullptr;
@@ -510,7 +510,48 @@ namespace Winsock
         }
 
         // Notify the developer about this event.
-        Debugprint(va("%s: \"%s\" -> %s", __func__, Nodename, inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)));
+        Debugprint(va("%s: \"%s\" -> %s", __func__, Nodename, WSResult != 0 ? "Error" : inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)));
+        return WSResult;
+    }
+    int __stdcall GetaddrinfoW(const wchar_t *Nodename, const wchar_t *Servicename, ADDRINFOW *Hints, ADDRINFOW **Result)
+    {
+        int WSResult = 0;
+
+        std::wstring Temp = Nodename;
+        std::string Hostname = { Temp.begin(), Temp.end() };
+
+        // Create a server from the hostname, or ask Windows for it.
+        auto Server = Localnetworking::Createserver(Hostname);
+
+        // Resolve the hostname through Winsock to allocate the result struct.
+        if (Hints) Hints->ai_family = PF_INET;
+        CALLWS(GetAddrInfoW, &WSResult, Nodename, Servicename, Hints, Result);
+
+        // Modify the allocated structure to match our server.
+        if (Server)
+        {
+            // Resolve a known host if the previous call failed.
+            if (0 != WSResult) CALLWS(GetAddrInfoW, &WSResult, L"localhost", nullptr, Hints, Result);
+            if (0 != WSResult) return WSResult;
+
+            // Create a fake IP address from the hostname.
+            uint32_t IPHash = Hash::FNV1a_32(Hostname.c_str());
+            uint8_t *IP = (uint8_t *)&IPHash;
+
+            // Associate the server instance with the fake IP address we created.
+            auto ReadableIP = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
+            Localnetworking::Associateaddress(ReadableIP, Hostname);
+            Localnetworking::Emplaceserver(ReadableIP, Server);
+
+            // Set the IP for all records.
+            for (ADDRINFOW *ptr = *Result; ptr != NULL; ptr = ptr->ai_next)
+            {
+                ((sockaddr_in *)ptr->ai_addr)->sin_addr.S_un.S_addr = inet_addr(ReadableIP.c_str());
+            }
+        }
+
+        // Notify the developer about this event.
+        Debugprint(va("%s: \"%s\" -> %s", __func__, Hostname.c_str(), WSResult != 0 ? "Error" : inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)));
         return WSResult;
     }
     int __stdcall Getpeername(size_t Socket, struct sockaddr *Name, int *Namelength)
@@ -579,6 +620,14 @@ namespace Winsock
 
         return 0;
     }
+    hostent *__stdcall Gethostbyaddr(const char *Address, int Addresslength, int Addresstype)
+    {
+        sockaddr Localaddress;
+        Localaddress.sa_family = Addresstype;
+        std::memcpy(Localaddress.sa_data, Address, Addresslength);
+
+        return Gethostbyname(Plainaddress(&Localaddress).c_str());
+    }
 
     /*
         TODO(Convery):
@@ -620,6 +669,8 @@ namespace Winsock
             INSTALL_HOOK("getsockname", Getsockname);
             INSTALL_HOOK("closesocket", Closesocket);
             INSTALL_HOOK("shutdown", Shutdown);
+            INSTALL_HOOK("gethostbyaddr", Gethostbyaddr);
+            INSTALL_HOOK("GetAddrInfoW", GetaddrinfoW);
         }
     };
 
