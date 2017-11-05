@@ -179,7 +179,7 @@ namespace Wininet
         HTTPRequest += "\r\n";
 
         // Send to winsock that forwards it to the server.
-        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), HTTPRequest.size(), NULL);
+        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), uint32_t(HTTPRequest.size()), NULL);
 
         return TRUE;
     }
@@ -205,7 +205,7 @@ namespace Wininet
         HTTPRequest += "\r\n";
 
         // Send to winsock that forwards it to the server.
-        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), HTTPRequest.size(), NULL);
+        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), uint32_t(HTTPRequest.size()), NULL);
 
         return TRUE;
     }
@@ -230,7 +230,7 @@ namespace Wininet
             HTTPRequest.append((char *)lpOptional, dwOptionalLength);
 
         // Send to winsock that forwards it to the server.
-        send(Activerequests[hRequest].Socket, HTTPRequest.data(), HTTPRequest.size(), NULL);
+        send(Activerequests[hRequest].Socket, HTTPRequest.data(), uint32_t(HTTPRequest.size()), NULL);
 
         return TRUE;
     }
@@ -241,7 +241,7 @@ namespace Wininet
         std::wstring Temporary = lpszHeaders;
         std::string Headers = { Temporary.begin(), Temporary.end() };
 
-        return HTTPSendrequestA(hRequest, Headers.c_str(), Headers.size(), lpOptional, dwOptionalLength);
+        return HTTPSendrequestA(hRequest, Headers.c_str(), uint32_t(Headers.size()), lpOptional, dwOptionalLength);
     }
 
     BOOL __stdcall InternetQueryoptionA(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, LPDWORD lpdwBufferLength)
@@ -300,6 +300,7 @@ namespace Wininet
         return TRUE;
     }
 
+
     #pragma endregion
 
     #pragma region Installer
@@ -339,6 +340,8 @@ namespace Wininet
             INSTALL_HOOK("HttpSendRequestW", HTTPSendrequestW);
             INSTALL_HOOK("InternetWriteFile", InternetWritefile);
             INSTALL_HOOK("InternetReadFile", InternetReadfile);
+
+            //INSTALL_HOOK("HttpQueryInfoA", HTTPQueryinfoA);
         }
     };
 

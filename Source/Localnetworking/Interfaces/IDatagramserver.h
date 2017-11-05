@@ -77,7 +77,7 @@ struct IDatagramserver : IServer
             // Create a new string and let the compiler optimize it out.
             auto Pointer = reinterpret_cast<const char *>(Databuffer);
             auto Packet = std::string(Pointer, Datasize);
-            onData(Server, Packet);
+            onData(Packet);
 
             // Ensure that the mutex is locked as usercode is unpredictable.
             Threadguard.try_lock();
