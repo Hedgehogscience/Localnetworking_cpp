@@ -53,6 +53,7 @@ endif()
 if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" OR ${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
     target_link_libraries(Localnetworking dl pthread)
 else()
+    target_link_libraries(Localnetworking ws2_32)
 endif()
 
 # Use static VC runtimes when releasing on Windows.
