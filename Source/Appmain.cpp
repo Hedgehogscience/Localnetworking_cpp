@@ -54,7 +54,24 @@ extern "C" EXPORT_ATTR void onMessage(uint32_t MessageID, uint32_t Messagesize, 
     // MessageID is a FNV1a_32 hash of a string.
     switch (MessageID)
     {
-        case Hash::FNV1a_32(MODULENAME "_Default"):
+        case Hash::FNV1a_32(MODULENAME "::Enqueueframe"):
+        {
+            Address_t Sender;
+            std::string Plainaddress;
+            std::vector<uint8_t> Packetrawdata;
+
+            // Deserialize the request.
+            Message.Read(Sender.Port);
+            Message.Read(Plainaddress);
+            Message.Read(Packetrawdata);
+
+            // Copy the plain address into the C buffer and enqueue it.
+            std::memcpy(Sender.Plainaddress, Plainaddress.c_str(), Plainaddress.size());
+            std::string Data{ Packetrawdata.begin(), Packetrawdata.end() };
+            Localnetworking::Enqueueframe(Sender, Data);
+            break;
+        }
+        case Hash::FNV1a_32(MODULENAME "::Default"):
         default: break;
     }
 }
