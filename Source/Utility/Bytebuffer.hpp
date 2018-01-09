@@ -1,14 +1,13 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 29-07-2017
+    Started: 08-01-2018
     License: MIT
     Notes:
-        Provides a fast and simple storagetype.
-        Mainly for internal use.
+        Provides fast and simple storage for messages.
 */
 
 #pragma once
-#include "../../Stdinclude.h"
+#include "../Stdinclude.hpp"
 
 class Bytebuffer
 {
@@ -51,6 +50,7 @@ class Bytebuffer
 
 public:
     // Creates the internal state.
+    Bytebuffer(size_t Datasize, const void *Databuffer);
     void Setbuffer(std::vector<uint8_t> &Data);
     Bytebuffer(std::vector<uint8_t> &Data);
     Bytebuffer(const Bytebuffer &Right);
@@ -60,15 +60,15 @@ public:
     Bytebuffer();
 
     // Access the internal state.
-    bool Setposition(size_t Newposition);               // Sets the internal read/write iterator.
-    const size_t Getposition();                         // Gets the internal read/write iterator.
-    std::string to_string();                            // Print Internalvariables.
-    const uint8_t *Data();                              // Returns a pointer to the internal buffer.
-    const uint8_t Peek();                               // Returns the next byte in the buffer or -1.
-    const size_t Size();                                // Returns the size of the current buffer.
-    void Deserialize();                                 // Deserialize the buffer into variables.
-    void Rewind();                                      // Resets the internal read/write iterator.
-    void Clear();                                       // Clears the internal buffer.
+    bool Setposition(size_t Newposition);                           // Sets the internal read/write iterator.
+    const size_t Getposition();                                     // Gets the internal read/write iterator.
+    std::string to_string();                                        // Print Internalvariables.
+    const uint8_t *Data();                                          // Returns a pointer to the internal buffer.
+    const uint8_t Peek();                                           // Returns the next byte in the buffer or -1.
+    const size_t Size();                                            // Returns the size of the current buffer.
+    void Deserialize();                                             // Deserialize the buffer into variables.
+    void Rewind();                                                  // Resets the internal read/write iterator.
+    void Clear();                                                   // Clears the internal buffer.
 
     // Single data IO.
     template <typename Type> Type Read(bool Typechecked = true);

@@ -1,16 +1,16 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 17-10-2017
+    Started: 09-01-2018
     License: MIT
     Notes:
-        A base type for polymorphism.
+        Provides a basic server interface.
 */
 
 #pragma once
 #include <cstdint>
 
-// Universal representation of an address.
-struct IPAddress_t
+// Universal representation of addresses.
+struct Address_t
 {
     uint16_t Port;
     char Plainaddress[65];
@@ -21,8 +21,8 @@ struct IPAddress_t
 struct IServer
 {
     // Packet-based IO for protocols such as UDP and ICMP.
-    virtual bool onPacketread(IPAddress_t &Server, void *Databuffer, uint32_t *Datasize) = 0;
-    virtual bool onPacketwrite(const IPAddress_t &Server, const void *Databuffer, const uint32_t Datasize) = 0;
+    virtual bool onPacketread(Address_t &Server, void *Databuffer, uint32_t *Datasize) = 0;
+    virtual bool onPacketwrite(const Address_t &Server, const void *Databuffer, const uint32_t Datasize) = 0;
 
     // Stream-based IO for protocols such as TCP.
     virtual void onDisconnect(const size_t Socket) = 0;

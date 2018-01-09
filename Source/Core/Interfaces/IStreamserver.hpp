@@ -1,14 +1,14 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 17-10-2017
+    Started: 09-01-2018
     License: MIT
     Notes:
-        Implements a stream-based form of IO.
+        Provides a stream-based form of IO.
 */
 
 #pragma once
-#include "IServer.h"
 #include <unordered_map>
+#include "IServer.hpp"
 #include <algorithm>
 #include <vector>
 #include <mutex>
@@ -121,7 +121,7 @@ struct IStreamserver : IServer
     }
 
     // Nullsub the unused callbacks.
-    virtual bool onPacketread(IPAddress_t &Server, void *Databuffer, uint32_t *Datasize)
+    virtual bool onPacketread(Address_t &Server, void *Databuffer, uint32_t *Datasize)
     {
         (void)Server;
         (void)Datasize;
@@ -129,7 +129,7 @@ struct IStreamserver : IServer
 
         return false;
     }
-    virtual bool onPacketwrite(const IPAddress_t &Server, const void *Databuffer, const uint32_t Datasize)
+    virtual bool onPacketwrite(const Address_t &Server, const void *Databuffer, const uint32_t Datasize)
     {
         (void)Server;
         (void)Datasize;

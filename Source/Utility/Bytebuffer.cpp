@@ -1,13 +1,12 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 29-07-2017
+    Started: 08-01-2018
     License: MIT
     Notes:
-        Provides a fast and simple storagetype.
-        Mainly for internal use.
+        Provides fast and simple storage for messages.
 */
 
-#include "Bytebuffer.h"
+#include "../Stdinclude.hpp"
 
 // Core functionality.
 bool Bytebuffer::Readdatatype(Bytebuffertype Type)
@@ -57,6 +56,15 @@ bool Bytebuffer::Rawwrite(size_t Writecount, const void *Buffer)
 }
 
 // Creates the internal state.
+Bytebuffer::Bytebuffer(size_t Datasize, const void *Databuffer)
+{
+    Internaliterator = 0;
+    Internalsize = Datasize;
+    Internalbuffer = std::make_unique<uint8_t[]>(Internalsize);
+    std::memcpy(Internalbuffer.get(), Databuffer, Internalsize);
+
+    Deserialize();
+}
 void Bytebuffer::Setbuffer(std::vector<uint8_t> &Data)
 {
     Internaliterator = 0;
@@ -108,7 +116,6 @@ Bytebuffer::Bytebuffer()
     Internalbuffer = std::make_unique<uint8_t []>(0);
     Internaliterator = 0;
     Internalsize = 0;
-
 }
 
 // Access the internal state.

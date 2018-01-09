@@ -1,30 +1,25 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 26-10-2017
+    Started: 09-01-2018
     License: MIT
     Notes:
         Provides an interface-shim for Windows sockets.
 */
 
-// Naturally this file is for Windows only.
-#if defined (_WIN32)
-#include "../Stdinclude.h"
-
-// Remove some Windows annoyance.
-#if defined(min) || defined(max)
-    #undef min
-    #undef max
-#endif
+#if defined(_WIN32)
+#include "../Stdinclude.hpp"
+#include <WinSock2.h>
+#include <Ws2tcpip.h>
 
 namespace Winsock
 {
-    #pragma region Hooking
+#pragma region Hooking
     // Track all the hooks installed into WS2_32 and wsock32 by name.
     std::unordered_map<std::string, void *> WSHooks1;
     std::unordered_map<std::string, void *> WSHooks2;
 
     // Macros to make calling WS a little easier.
-    #define CALLWS(_Function, _Result, ...) {                           \
+#define CALLWS(_Function, _Result, ...) {                           \
     auto Pointer = WSHooks1[__func__];                                  \
     if(!Pointer) Pointer = WSHooks2[__func__];                          \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
@@ -33,7 +28,7 @@ namespace Winsock
     *_Result = Hook->Function.second(__VA_ARGS__);                      \
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
-    #define CALLWS_NORET(_Function, ...) {                              \
+#define CALLWS_NORET(_Function, ...) {                              \
     auto Pointer = WSHooks1[__func__];                                  \
     if(!Pointer) Pointer = WSHooks2[__func__];                          \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
@@ -42,9 +37,9 @@ namespace Winsock
     Hook->Function.second(__VA_ARGS__);                                 \
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
-    #pragma endregion
+#pragma endregion
 
-    #pragma region Helpers
+#pragma region Helpers
     std::unordered_map<size_t /* Socket */, bool> Blockingsockets;
 
     std::string Plainaddress(const struct sockaddr *Sockaddr)
@@ -63,18 +58,18 @@ namespace Winsock
         if (Sockaddr->sa_family == AF_INET6) return ntohs(((struct sockaddr_in6 *)Sockaddr)->sin6_port);
         else return ntohs(((struct sockaddr_in *)Sockaddr)->sin_port);
     }
-    IPAddress_t Localaddress(const struct sockaddr *Sockaddr)
+    Address_t Localaddress(const struct sockaddr *Sockaddr)
     {
-        IPAddress_t Result{};
+        Address_t Result{};
         Result.Port = WSPort(Sockaddr);
         auto Address = Plainaddress(Sockaddr);
         std::memcpy(Result.Plainaddress, Address.c_str(), Address.size());
 
         return Result;
     }
-    #pragma endregion
+#pragma endregion
 
-    #pragma region Shims
+#pragma region Shims
     int __stdcall Bind(size_t Socket, const struct sockaddr *Name, int Namelength)
     {
         int Result = 0;
@@ -83,7 +78,7 @@ namespace Winsock
         auto Server = Localnetworking::Findserver(Plainaddress(Name));
         if (!Server) Server = Localnetworking::Createserver(Plainaddress(Name));
         if (!Server) CALLWS(bind, &Result, Socket, Name, Namelength);
-        if (Server) Localnetworking::Associatesocket(Server, Socket);
+        if (Server) Localnetworking::Createsocket(Server, Socket);
         Localnetworking::Addfilter(Socket, Localaddress(Name));
 
         return Result;
@@ -97,12 +92,12 @@ namespace Winsock
         if (Server)
         {
             Server->onDisconnect(Socket);
-            Localnetworking::Disassociatesocket(Server, Socket);
+            Localnetworking::Destroysocket(Server, Socket);
         }
 
         // Create a new server instance from the hostname, even if it's the same host.
         Server = Localnetworking::Createserver(Plainaddress(Name));
-        if (Server) Localnetworking::Associatesocket(Server, Socket);
+        if (Server) Localnetworking::Createsocket(Server, Socket);
         if (Server) Server->onConnect(Socket, WSPort(Name));
 
         // Ask Windows to connect the socket if there's no server.
@@ -120,19 +115,19 @@ namespace Winsock
         // TODO(Convery): Implement more socket options here.
         switch (Command)
         {
-            case FIONBIO:
-            {
-                Readable = "FIONBIO";
-                Blockingsockets[Socket] = *Argument == 0;
-                break;
-            }
-            case FIONREAD: Readable = "FIONREAD"; break;
-            case FIOASYNC: Readable = "FIOASYNC"; break;
-            case SIOCSHIWAT: Readable = "SIOCSHIWAT"; break;
-            case SIOCGHIWAT: Readable = "SIOCGHIWAT"; break;
-            case SIOCSLOWAT: Readable = "SIOCSLOWAT"; break;
-            case SIOCGLOWAT: Readable = "SIOCGLOWAT"; break;
-            case SIOCATMARK: Readable = "SIOCATMARK"; break;
+        case FIONBIO:
+        {
+            Readable = "FIONBIO";
+            Blockingsockets[Socket] = *Argument == 0;
+            break;
+        }
+        case FIONREAD: Readable = "FIONREAD"; break;
+        case FIOASYNC: Readable = "FIOASYNC"; break;
+        case SIOCSHIWAT: Readable = "SIOCSHIWAT"; break;
+        case SIOCGHIWAT: Readable = "SIOCGHIWAT"; break;
+        case SIOCSLOWAT: Readable = "SIOCSLOWAT"; break;
+        case SIOCGLOWAT: Readable = "SIOCGLOWAT"; break;
+        case SIOCATMARK: Readable = "SIOCATMARK"; break;
         }
 
         // Debug information.
@@ -178,11 +173,11 @@ namespace Winsock
             do
             {
                 Successful = Server->onStreamread(Socket, Buffer, &Result);
-                if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                if (!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
             } while (!Successful && Blockingsockets[Socket]);
 
             // Ensure that any errors are non-fatal.
-            if(!Successful) WSASetLastError(WSAEWOULDBLOCK);
+            if (!Successful) WSASetLastError(WSAEWOULDBLOCK);
         }
 
         // Ask Windows to fetch some data from the socket if it's not ours.
@@ -205,9 +200,9 @@ namespace Winsock
         }
 
         // Check if it's a socket associated with our network.
-        if (Localnetworking::isAssociated(Socket))
+        if (Localnetworking::isInternalsocket(Socket))
         {
-            IPAddress_t Localfrom; std::string Packet;
+            Address_t Localfrom; std::string Packet;
 
             // Check if there's any data on the socket and return that.
             do
@@ -271,7 +266,7 @@ namespace Winsock
         std::vector<size_t> Readsockets;
         std::vector<size_t> Writesockets;
 
-        for (auto &Item : Localnetworking::Activesockets())
+        for (auto &Item : Localnetworking::Internalsockets())
         {
             if (Readfds)
             {
@@ -365,7 +360,7 @@ namespace Winsock
             do
             {
                 Successful = Server->onStreamwrite(Socket, Buffer, Result);
-                if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                if (!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
             } while (!Successful && Blockingsockets[Socket]);
         }
 
@@ -411,7 +406,7 @@ namespace Winsock
             }
 
             // Associate the socket if we haven't.
-            Localnetworking::Associatesocket(Server, Socket);
+            Localnetworking::Createsocket(Server, Socket);
             Localnetworking::Addfilter(Socket, Localaddress(To));
 
             // Convert to the universal representation.
@@ -421,7 +416,7 @@ namespace Winsock
             do
             {
                 Successful = Server->onPacketwrite(Address, Buffer, Result);
-                if(!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                if (!Successful) std::this_thread::sleep_for(std::chrono::milliseconds(10));
             } while (!Successful && Blockingsockets[Socket]);
         }
 
@@ -453,8 +448,8 @@ namespace Winsock
 
         // Associate the server instance with the fake IP address we created.
         auto ReadableIP = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
-        Localnetworking::Associateaddress(ReadableIP, Hostname);
-        Localnetworking::Emplaceserver(ReadableIP, Server);
+        Localnetworking::Forceresolvehost(ReadableIP, Hostname);
+        Localnetworking::Duplicateserver(ReadableIP, Server);
 
         // Create the Winsock address struct.
         auto Localaddress = new in_addr();
@@ -499,8 +494,8 @@ namespace Winsock
 
             // Associate the server instance with the fake IP address we created.
             auto ReadableIP = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
-            Localnetworking::Associateaddress(ReadableIP, Nodename);
-            Localnetworking::Emplaceserver(ReadableIP, Server);
+            Localnetworking::Forceresolvehost(ReadableIP, Nodename);
+            Localnetworking::Duplicateserver(ReadableIP, Server);
 
             // Set the IP for all records.
             for (ADDRINFOA *ptr = *Result; ptr != NULL; ptr = ptr->ai_next)
@@ -540,8 +535,8 @@ namespace Winsock
 
             // Associate the server instance with the fake IP address we created.
             auto ReadableIP = va("%u.%u.%u.%u", IP[0], IP[1], IP[2], IP[3]);
-            Localnetworking::Associateaddress(ReadableIP, Hostname);
-            Localnetworking::Emplaceserver(ReadableIP, Server);
+            Localnetworking::Forceresolvehost(ReadableIP, Hostname);
+            Localnetworking::Duplicateserver(ReadableIP, Server);
 
             // Set the IP for all records.
             for (ADDRINFOW *ptr = *Result; ptr != NULL; ptr = ptr->ai_next)
@@ -623,7 +618,7 @@ namespace Winsock
     hostent *__stdcall Gethostbyaddr(const char *Address, int Addresslength, int Addresstype)
     {
         sockaddr Localaddress;
-        Localaddress.sa_family = Addresstype;
+        Localaddress.sa_family = uint16_t(Addresstype);
         std::memcpy(Localaddress.sa_data, Address, Addresslength);
 
         return Gethostbyname(Plainaddress(&Localaddress).c_str());
@@ -635,48 +630,46 @@ namespace Winsock
         The async ones can be interesting.
         Remember to add new ones to the installer!
     */
-    #pragma endregion
+#pragma endregion
 
-    #pragma region Installer
-    struct WSInstaller
+#pragma region Installer
+    void WSInstaller()
     {
-        WSInstaller()
-        {
-            // Helper-macro to save the developers fingers.
-            #define INSTALL_HOOK(_Function, _Replacement) {                                                                                     \
-            auto Address = (void *)GetProcAddress(GetModuleHandleA("wsock32.dll"), _Function);                                                  \
-            if(Address) {                                                                                                                       \
-            Winsock::WSHooks1[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
-            ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks1[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
-            Address = (void *)GetProcAddress(GetModuleHandleA("WS2_32.dll"), _Function);                                                        \
-            if(Address) {                                                                                                                       \
-            Winsock::WSHooks2[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
-            ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
-            }                                                                                                                                   \
+        // Helper-macro to save the developers fingers.
+        #define INSTALL_HOOK(_Function, _Replacement) {                                                                                     \
+        auto Address = (void *)GetProcAddress(GetModuleHandleA("wsock32.dll"), _Function);                                                  \
+        if(Address) {                                                                                                                       \
+        Winsock::WSHooks1[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
+        ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks1[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
+        Address = (void *)GetProcAddress(GetModuleHandleA("WS2_32.dll"), _Function);                                                        \
+        if(Address) {                                                                                                                       \
+        Winsock::WSHooks2[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
+        ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
+        }                                                                                                                                   \
 
-            // Place the hooks directly in winsock.
-            INSTALL_HOOK("bind", Bind);
-            INSTALL_HOOK("connect", Connect);
-            INSTALL_HOOK("ioctlsocket", IOControlsocket);
-            INSTALL_HOOK("recv", Receive);
-            INSTALL_HOOK("recvfrom", Receivefrom);
-            INSTALL_HOOK("select", Select);
-            INSTALL_HOOK("send", Send);
-            INSTALL_HOOK("sendto", Sendto);
-            INSTALL_HOOK("gethostbyname", Gethostbyname);
-            INSTALL_HOOK("getaddrinfo", Getaddrinfo);
-            INSTALL_HOOK("getpeername", Getpeername);
-            INSTALL_HOOK("getsockname", Getsockname);
-            INSTALL_HOOK("closesocket", Closesocket);
-            INSTALL_HOOK("shutdown", Shutdown);
-            INSTALL_HOOK("gethostbyaddr", Gethostbyaddr);
-            INSTALL_HOOK("GetAddrInfoW", GetaddrinfoW);
-        }
+        // Place the hooks directly in winsock.
+        INSTALL_HOOK("bind", Bind);
+        INSTALL_HOOK("connect", Connect);
+        INSTALL_HOOK("ioctlsocket", IOControlsocket);
+        INSTALL_HOOK("recv", Receive);
+        INSTALL_HOOK("recvfrom", Receivefrom);
+        INSTALL_HOOK("select", Select);
+        INSTALL_HOOK("send", Send);
+        INSTALL_HOOK("sendto", Sendto);
+        INSTALL_HOOK("gethostbyname", Gethostbyname);
+        INSTALL_HOOK("getaddrinfo", Getaddrinfo);
+        INSTALL_HOOK("getpeername", Getpeername);
+        INSTALL_HOOK("getsockname", Getsockname);
+        INSTALL_HOOK("closesocket", Closesocket);
+        INSTALL_HOOK("shutdown", Shutdown);
+        INSTALL_HOOK("gethostbyaddr", Gethostbyaddr);
+        INSTALL_HOOK("GetAddrInfoW", GetaddrinfoW);
     };
 
-    // Install the hooks on startup.
-    static WSInstaller Installer{};
-    #pragma endregion
+    // Add the installer on startup.
+    struct Installer { Installer() { Localnetworking::Addplatform(WSInstaller); }; };
+    static Installer Startup{};
+#pragma endregion
 }
 
 #undef INSTALL_HOOK

@@ -1,13 +1,13 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 17-10-2017
+    Started: 09-01-2018
     License: MIT
     Notes:
-        Implements a packet-based form of IO.
+        Provides a packet-based form of IO.
 */
 
 #pragma once
-#include "IServer.h"
+#include "IServer.hpp"
 #include <algorithm>
 #include <string>
 #include <queue>
@@ -16,7 +16,7 @@
 struct IDatagramserver : IServer
 {
     std::queue<std::string> Packetqueue;
-    IPAddress_t Hostinformation{};
+    Address_t Hostinformation{};
     std::mutex Threadguard;
 
     // Usercode interaction.
@@ -36,7 +36,7 @@ struct IDatagramserver : IServer
     virtual void onData(const std::string &Packet) = 0;
 
     // Returns false if the request could not be completed for any reason.
-    virtual bool onPacketread(IPAddress_t &Server, void *Databuffer, uint32_t *Datasize)
+    virtual bool onPacketread(Address_t &Server, void *Databuffer, uint32_t *Datasize)
     {
         // If there's no packets, return instantly.
         if (Packetqueue.empty()) return false;
@@ -59,20 +59,20 @@ struct IDatagramserver : IServer
                 std::copy_n(Packet.begin(), *Datasize, reinterpret_cast<char *>(Databuffer));
 
                 // Set the servers address.
-                std::memcpy(&Server, &Hostinformation, sizeof(IPAddress_t));
+                std::memcpy(&Server, &Hostinformation, sizeof(Address_t));
             }
         }
         Threadguard.unlock();
 
         return true;
     }
-    virtual bool onPacketwrite(const IPAddress_t &Server, const void *Databuffer, const uint32_t Datasize)
+    virtual bool onPacketwrite(const Address_t &Server, const void *Databuffer, const uint32_t Datasize)
     {
         // Pass the packet to the usercode callback.
         Threadguard.lock();
         {
             // Update the servers address.
-            std::memcpy(&Hostinformation, &Server, sizeof(IPAddress_t));
+            std::memcpy(&Hostinformation, &Server, sizeof(Address_t));
 
             // Create a new string and let the compiler optimize it out.
             auto Pointer = reinterpret_cast<const char *>(Databuffer);

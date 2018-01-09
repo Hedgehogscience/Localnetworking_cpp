@@ -1,21 +1,16 @@
 /*
     Initial author: Convery (tcn@ayria.se)
-    Started: 3-11-2017
+    Started: 09-01-2018
     License: MIT
     Notes:
-        Re-implements part of Windows INet and HTTP.
+        Provides an interface-shim for Windows INet and HTTP.
 */
 
-// Naturally this file is for Windows only.
-#if defined (_WIN32)
-#include "../Stdinclude.h"
+#if defined(_WIN32)
+#include "../Stdinclude.hpp"
+#include <WinSock2.h>
+#include <Ws2tcpip.h>
 #include <Wininet.h>
-
-// Remove some Windows annoyance.
-#if defined(min) || defined(max)
-    #undef min
-    #undef max
-#endif
 
 namespace Wininet
 {
@@ -36,7 +31,7 @@ namespace Wininet
     std::unordered_map<size_t, Internetrequest> Activerequests;
     std::atomic<size_t> GlobalrequestID = 10;
 
-    #pragma region Hooking
+#pragma region Hooking
     // Track all the hooks installed into INET and HTTP.
     std::unordered_map<std::string, void *> WSHooks1;
     std::unordered_map<std::string, void *> WSHooks2;
@@ -60,9 +55,9 @@ namespace Wininet
     Hook->Function.second(__VA_ARGS__);                                 \
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
-    #pragma endregion
+#pragma endregion
 
-    #pragma region Shims
+#pragma region Shims
     size_t __stdcall InternetopenA(LPCSTR lpszAgent, DWORD dwAccessType, LPCSTR lpszProxy, LPCSTR lpszProxyBypass, DWORD dwFlags)
     {
         Internetrequest Request;
@@ -179,7 +174,7 @@ namespace Wininet
         HTTPRequest += "\r\n";
 
         // Send to winsock that forwards it to the server.
-        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), uint32_t(HTTPRequest.size()), NULL);
+        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), HTTPRequest.size(), NULL);
 
         return TRUE;
     }
@@ -205,7 +200,7 @@ namespace Wininet
         HTTPRequest += "\r\n";
 
         // Send to winsock that forwards it to the server.
-        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), uint32_t(HTTPRequest.size()), NULL);
+        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), HTTPRequest.size(), NULL);
 
         return TRUE;
     }
@@ -230,7 +225,7 @@ namespace Wininet
             HTTPRequest.append((char *)lpOptional, dwOptionalLength);
 
         // Send to winsock that forwards it to the server.
-        send(Activerequests[hRequest].Socket, HTTPRequest.data(), uint32_t(HTTPRequest.size()), NULL);
+        send(Activerequests[hRequest].Socket, HTTPRequest.data(), HTTPRequest.size(), NULL);
 
         return TRUE;
     }
@@ -241,7 +236,7 @@ namespace Wininet
         std::wstring Temporary = lpszHeaders;
         std::string Headers = { Temporary.begin(), Temporary.end() };
 
-        return HTTPSendrequestA(hRequest, Headers.c_str(), uint32_t(Headers.size()), lpOptional, dwOptionalLength);
+        return HTTPSendrequestA(hRequest, Headers.c_str(), Headers.size(), lpOptional, dwOptionalLength);
     }
 
     BOOL __stdcall InternetQueryoptionA(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, LPDWORD lpdwBufferLength)
@@ -299,55 +294,49 @@ namespace Wininet
         *lpdwNumberOfBytesRead = Result;
         return TRUE;
     }
+#pragma endregion
 
-
-    #pragma endregion
-
-    #pragma region Installer
-    struct INETInstaller
+#pragma region Installer
+    void INETInstaller()
     {
-        INETInstaller()
-        {
-            // Helper-macro to save the developers fingers.
-            #define INSTALL_HOOK(_Function, _Replacement) {                                                                                     \
-            auto Address = (void *)GetProcAddress(GetModuleHandleA("wininet.dll"), _Function);                                                  \
-            if(Address) {                                                                                                                       \
-            Wininet::WSHooks1[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
-            ((Hooking::StomphookEx<decltype(_Replacement)> *)Wininet::WSHooks1[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
-            Address = (void *)GetProcAddress(GetModuleHandleA("winhttp.dll"), _Function);                                                       \
-            if(Address) {                                                                                                                       \
-            Wininet::WSHooks2[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
-            ((Hooking::StomphookEx<decltype(_Replacement)> *)Wininet::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
-            }                                                                                                                                   \
+        // Helper-macro to save the developers fingers.
+        #define INSTALL_HOOK(_Function, _Replacement) {                                                                                     \
+        auto Address = (void *)GetProcAddress(GetModuleHandleA("wininet.dll"), _Function);                                                  \
+        if(Address) {                                                                                                                       \
+        Wininet::WSHooks1[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
+        ((Hooking::StomphookEx<decltype(_Replacement)> *)Wininet::WSHooks1[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
+        Address = (void *)GetProcAddress(GetModuleHandleA("winhttp.dll"), _Function);                                                       \
+        if(Address) {                                                                                                                       \
+        Wininet::WSHooks2[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
+        ((Hooking::StomphookEx<decltype(_Replacement)> *)Wininet::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
+        }                                                                                                                                   \
 
-            // Place the hooks directly in windows INET.
-            INSTALL_HOOK("InternetOpenA", InternetopenA);
-            INSTALL_HOOK("InternetOpenW", InternetopenW);
-            INSTALL_HOOK("InternetConnectA", InternetconnectA);
-            INSTALL_HOOK("InternetConnectW", InternetconnectW);
-            INSTALL_HOOK("InternetAttemptConnect", InternetAttemptconnect);
-            INSTALL_HOOK("HttpOpenRequestA", HTTPOpenrequestA);
-            INSTALL_HOOK("HttpOpenRequestW", HTTPOpenrequestW);
-            INSTALL_HOOK("HttpAddRequestHeadersA", HTTPAddrequestheadersA);
-            INSTALL_HOOK("HttpAddRequestHeadersW", HTTPAddrequestheadersW);
-            INSTALL_HOOK("HttpSendRequestExA", HTTPSendrequestExA);
-            INSTALL_HOOK("HttpSendRequestExW", HTTPSendrequestExA);
-            INSTALL_HOOK("InternetQueryOptionA", InternetQueryoptionA);
-            INSTALL_HOOK("InternetQueryOptionW", InternetQueryoptionW);
-            INSTALL_HOOK("InternetSetOptionA", InternetSetoptionA);
-            INSTALL_HOOK("InternetSetOptionW", InternetSetoptionW);
-            INSTALL_HOOK("HttpSendRequestA", HTTPSendrequestA);
-            INSTALL_HOOK("HttpSendRequestW", HTTPSendrequestW);
-            INSTALL_HOOK("InternetWriteFile", InternetWritefile);
-            INSTALL_HOOK("InternetReadFile", InternetReadfile);
-
-            //INSTALL_HOOK("HttpQueryInfoA", HTTPQueryinfoA);
-        }
+        // Place the hooks directly in windows INET.
+        INSTALL_HOOK("InternetOpenA", InternetopenA);
+        INSTALL_HOOK("InternetOpenW", InternetopenW);
+        INSTALL_HOOK("InternetConnectA", InternetconnectA);
+        INSTALL_HOOK("InternetConnectW", InternetconnectW);
+        INSTALL_HOOK("InternetAttemptConnect", InternetAttemptconnect);
+        INSTALL_HOOK("HttpOpenRequestA", HTTPOpenrequestA);
+        INSTALL_HOOK("HttpOpenRequestW", HTTPOpenrequestW);
+        INSTALL_HOOK("HttpAddRequestHeadersA", HTTPAddrequestheadersA);
+        INSTALL_HOOK("HttpAddRequestHeadersW", HTTPAddrequestheadersW);
+        INSTALL_HOOK("HttpSendRequestExA", HTTPSendrequestExA);
+        INSTALL_HOOK("HttpSendRequestExW", HTTPSendrequestExA);
+        INSTALL_HOOK("InternetQueryOptionA", InternetQueryoptionA);
+        INSTALL_HOOK("InternetQueryOptionW", InternetQueryoptionW);
+        INSTALL_HOOK("InternetSetOptionA", InternetSetoptionA);
+        INSTALL_HOOK("InternetSetOptionW", InternetSetoptionW);
+        INSTALL_HOOK("HttpSendRequestA", HTTPSendrequestA);
+        INSTALL_HOOK("HttpSendRequestW", HTTPSendrequestW);
+        INSTALL_HOOK("InternetWriteFile", InternetWritefile);
+        INSTALL_HOOK("InternetReadFile", InternetReadfile);
     };
 
-    // Install the hooks on startup.
-    static INETInstaller Installer{};
-    #pragma endregion
+    // Add the installer on startup.
+    struct Installer { Installer() { Localnetworking::Addplatform(INETInstaller); }; };
+    static Installer Startup{};
+#pragma endregion
 }
 
 #undef INSTALL_HOOK
