@@ -45,4 +45,3 @@ namespace Localnetworking
     void Loadallmodules();
     void Startpollthread();
 }
-
