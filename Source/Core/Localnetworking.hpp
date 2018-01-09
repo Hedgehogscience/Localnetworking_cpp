@@ -44,4 +44,8 @@ namespace Localnetworking
     // Initialize the modules and datagram IO.
     void Startpollthread();
     void Loadallmodules();
+
+    // Initialize the platform hooks.
+    void Addplatform(std::function<void()> Callback);
+    void Initializeplatforms();
 }
