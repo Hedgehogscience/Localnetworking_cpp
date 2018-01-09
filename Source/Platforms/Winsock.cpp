@@ -618,7 +618,7 @@ namespace Winsock
     hostent *__stdcall Gethostbyaddr(const char *Address, int Addresslength, int Addresstype)
     {
         sockaddr Localaddress;
-        Localaddress.sa_family = Addresstype;
+        Localaddress.sa_family = uint16_t(Addresstype);
         std::memcpy(Localaddress.sa_data, Address, Addresslength);
 
         return Gethostbyname(Plainaddress(&Localaddress).c_str());
@@ -669,7 +669,7 @@ namespace Winsock
     // Add the installer on startup.
     struct Installer { Installer() { Localnetworking::Addplatform(WSInstaller); }; };
     static Installer Startup{};
-    #pragma endregion
+#pragma endregion
 }
 
 #undef INSTALL_HOOK
