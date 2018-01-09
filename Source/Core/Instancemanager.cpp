@@ -77,7 +77,11 @@ namespace Localnetworking
             return nullptr;
     }
 
-    // Reverse lookup for debugging / information.
+    // Reverse lookup and debugging information.
+    void Forceresolvehost(std::string IP, std::string Hostname)
+    {
+        Resolvercache[IP] = Hostname;
+    }
     std::string Findhostname(IServer *Server)
     {
         for (auto &Item : Serverinstances)
@@ -89,7 +93,7 @@ namespace Localnetworking
         return "";
     }
 
-    // Load all server-modules from disk.
+    // Initialize the modules.
     void Loadallmodules()
     {
         // Enumerate all modules in the directory.
