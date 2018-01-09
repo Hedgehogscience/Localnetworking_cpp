@@ -42,6 +42,6 @@ namespace Localnetworking
     std::string Findhostname(IServer *Server);
 
     // Initialize the modules and datagram IO.
-    void Loadallmodules();
     void Startpollthread();
+    void Loadallmodules();
 }

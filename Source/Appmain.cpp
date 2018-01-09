@@ -20,6 +20,9 @@ extern "C" EXPORT_ATTR void onInitializationStart(bool Reserved)
         ----------------------------------------------------------------------
     */
 
+    // Initialize the modules and datagram IO.
+    Localnetworking::Startpollthread();
+    Localnetworking::Loadallmodules();
 }
 extern "C" EXPORT_ATTR void onInitializationDone(bool Reserved)
 {
