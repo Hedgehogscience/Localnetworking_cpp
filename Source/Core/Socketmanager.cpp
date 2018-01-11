@@ -72,7 +72,7 @@ namespace Localnetworking
         static int64_t Timestamp = 0;
 
         // Throttle the updating.
-        if (Timestamp + 5 < time(NULL)) return Sockets;
+        if (Timestamp + 5 > time(NULL)) return Sockets;
         Timestamp = time(NULL);
         Sockets.clear();
 
