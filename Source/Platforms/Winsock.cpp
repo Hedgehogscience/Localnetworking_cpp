@@ -446,7 +446,7 @@ namespace Winsock
     {
         // Create a server from the hostname, or ask Windows for it.
         auto Server = Localnetworking::Createserver(Hostname);
-        if (!Server)
+        if (!Server) 
         {
             static hostent *Resolvedhost;
             CALLWS(gethostbyname, &Resolvedhost, Hostname);
@@ -499,7 +499,7 @@ namespace Winsock
         if (Server)
         {
             // Resolve a known host if the previous call failed.
-            if (0 != WSResult) CALLWS(getaddrinfo, &WSResult, "localhost", nullptr, Hints, Result);
+            if (0 != WSResult) CALLWS(getaddrinfo, &WSResult, "localhost", Servicename, Hints, Result);
             if (0 != WSResult) return WSResult;
 
             // Create a fake IP address from the hostname.
@@ -541,7 +541,7 @@ namespace Winsock
         if (Server)
         {
             // Resolve a known host if the previous call failed.
-            if (0 != WSResult) CALLWS(GetAddrInfoW, &WSResult, L"localhost", nullptr, Hints, Result);
+            if (0 != WSResult) CALLWS(GetAddrInfoW, &WSResult, L"localhost", Servicename, Hints, Result);
             if (0 != WSResult) return WSResult;
 
             // Create a fake IP address from the hostname.
