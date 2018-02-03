@@ -18,6 +18,9 @@ namespace Winsock
     std::unordered_map<std::string, void *> WSHooks1;
     std::unordered_map<std::string, void *> WSHooks2;
 
+    // Save the state of WSAErrors.
+    uint32_t Lasterror;
+
     // Macros to make calling WS a little easier.
 #define CALLWS(_Function, _Result, ...) {                           \
     auto Pointer = WSHooks1[__func__];                                  \
@@ -26,6 +29,7 @@ namespace Winsock
     Hook->Function.first.lock();                                        \
     Hook->Removehook();                                                 \
     *_Result = Hook->Function.second(__VA_ARGS__);                      \
+    Lasterror = WSAGetLastError();                                      \
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
 #define CALLWS_NORET(_Function, ...) {                              \
@@ -35,6 +39,7 @@ namespace Winsock
     Hook->Function.first.lock();                                        \
     Hook->Removehook();                                                 \
     Hook->Function.second(__VA_ARGS__);                                 \
+    Lasterror = WSAGetLastError();                                      \
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
 #pragma endregion
@@ -81,6 +86,8 @@ namespace Winsock
         if (Server) Localnetworking::Createsocket(Server, Socket);
         Localnetworking::Addfilter(Socket, Localaddress(Name));
 
+        Debugprint(va("Listening on port %u", WSPort(Name)));
+        if (Result == -1) WSASetLastError(Lasterror);
         return Result;
     }
     int __stdcall Connect(size_t Socket, const struct sockaddr *Name, int Namelength)
@@ -105,6 +112,7 @@ namespace Winsock
 
         // Debug information.
         Debugprint(va("%s to %s:%u", Server || 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), WSPort(Name)));
+        if (Result == -1) WSASetLastError(Lasterror);
         return Server || 0 == Result ? 0 : -1;
     }
     int __stdcall IOControlsocket(size_t Socket, uint32_t Command, unsigned long *Argument)
@@ -135,6 +143,7 @@ namespace Winsock
 
         // Call the IOControl on the actual socket.
         CALLWS(ioctlsocket, &Result, Socket, Command, Argument);
+        if (Result == -1) WSASetLastError(Lasterror);
         return Result;
     }
     int __stdcall Receive(size_t Socket, char *Buffer, int Length, int Flags)
@@ -182,6 +191,7 @@ namespace Winsock
 
         // Ask Windows to fetch some data from the socket if it's not ours.
         if (!Server) CALLWS(recv, &Result, Socket, Buffer, Length, Flags);
+        if (!Server) if (Result == -1) WSASetLastError(Lasterror);
 
         // Return the length or error.
         if (Server && !Successful) return -1;
@@ -257,6 +267,7 @@ namespace Winsock
 
         // Ask Windows to fetch some data from the socket if it's not managed by us.
         CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
+        if (Result == uint32_t(-1)) WSASetLastError(Lasterror);
         if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
     }
@@ -366,6 +377,7 @@ namespace Winsock
 
         // Ask Windows to send the data from the socket if it's not ours.
         if (!Server) CALLWS(send, &Result, Socket, Buffer, Length, Flags);
+        if (!Server) if (Result == -1) WSASetLastError(Lasterror);
 
         // Return the length or error.
         if (Server && !Successful) return -1;
@@ -422,6 +434,7 @@ namespace Winsock
 
         // Ask Windows to send the data from the socket if it's not ours.
         if (!Server) CALLWS(sendto, &Result, Socket, Buffer, Length, Flags, To, Tolength);
+        if (!Server) if (Result == -1) WSASetLastError(Lasterror);
 
         // Return the length or error.
         if (Server && !Successful) return -1;
@@ -439,6 +452,7 @@ namespace Winsock
             CALLWS(gethostbyname, &Resolvedhost, Hostname);
 
             Debugprint(va("%s: \"%s\" -> %s", __func__, Hostname, Resolvedhost ? inet_ntoa(*(in_addr*)Resolvedhost->h_addr_list[0]) : "Could not resolve"));
+            if (!Resolvedhost) WSASetLastError(Lasterror);
             return Resolvedhost;
         }
 
@@ -506,6 +520,7 @@ namespace Winsock
 
         // Notify the developer about this event.
         Debugprint(va("%s: \"%s\" -> %s", __func__, Nodename, WSResult != 0 ? "Error" : inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)));
+        if (WSResult == -1) WSASetLastError(Lasterror);
         return WSResult;
     }
     int __stdcall GetaddrinfoW(const wchar_t *Nodename, const wchar_t *Servicename, ADDRINFOW *Hints, ADDRINFOW **Result)
@@ -547,6 +562,7 @@ namespace Winsock
 
         // Notify the developer about this event.
         Debugprint(va("%s: \"%s\" -> %s", __func__, Hostname.c_str(), WSResult != 0 ? "Error" : inet_ntoa(((sockaddr_in *)(*Result)->ai_addr)->sin_addr)));
+        if (WSResult == -1) WSASetLastError(Lasterror);
         return WSResult;
     }
     int __stdcall Getpeername(size_t Socket, struct sockaddr *Name, int *Namelength)
@@ -571,6 +587,7 @@ namespace Winsock
             Localname->sin_addr.S_un.S_addr = Address;
         }
 
+        if (!Server && Result == -1) WSASetLastError(Lasterror);
         return Result;
     }
     int __stdcall Getsockname(size_t Socket, struct sockaddr *Name, int *Namelength)
@@ -595,6 +612,7 @@ namespace Winsock
             Localname->sin_addr.S_un.S_addr = Address;
         }
 
+        if(!Server && Result == -1) WSASetLastError(Lasterror);
         return Result;
     }
     int __stdcall Closesocket(size_t Socket)
