@@ -31,7 +31,7 @@ namespace Wininet
     std::unordered_map<size_t, Internetrequest> Activerequests;
     std::atomic<size_t> GlobalrequestID = 10;
 
-#pragma region Hooking
+    #pragma region Hooking
     // Track all the hooks installed into INET and HTTP.
     std::unordered_map<std::string, void *> WSHooks1;
     std::unordered_map<std::string, void *> WSHooks2;
@@ -55,9 +55,9 @@ namespace Wininet
     Hook->Function.second(__VA_ARGS__);                                 \
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
-#pragma endregion
+    #pragma endregion
 
-#pragma region Shims
+    #pragma region Shims
     size_t __stdcall InternetopenA(LPCSTR lpszAgent, DWORD dwAccessType, LPCSTR lpszProxy, LPCSTR lpszProxyBypass, DWORD dwFlags)
     {
         Internetrequest Request;
@@ -294,9 +294,9 @@ namespace Wininet
         *lpdwNumberOfBytesRead = Result;
         return TRUE;
     }
-#pragma endregion
+    #pragma endregion
 
-#pragma region Installer
+    #pragma region Installer
     void INETInstaller()
     {
         // Helper-macro to save the developers fingers.
@@ -336,7 +336,7 @@ namespace Wininet
     // Add the installer on startup.
     struct Installer { Installer() { Localnetworking::Addplatform(INETInstaller); }; };
     static Installer Startup{};
-#pragma endregion
+    #pragma endregion
 }
 
 #undef INSTALL_HOOK

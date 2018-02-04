@@ -13,7 +13,7 @@
 
 namespace Winsock
 {
-#pragma region Hooking
+    #pragma region Hooking
     // Track all the hooks installed into WS2_32 and wsock32 by name.
     std::unordered_map<std::string, void *> WSHooks1;
     std::unordered_map<std::string, void *> WSHooks2;
@@ -22,7 +22,7 @@ namespace Winsock
     uint32_t Lasterror;
 
     // Macros to make calling WS a little easier.
-#define CALLWS(_Function, _Result, ...) {                           \
+    #define CALLWS(_Function, _Result, ...) {                           \
     auto Pointer = WSHooks1[__func__];                                  \
     if(!Pointer) Pointer = WSHooks2[__func__];                          \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
@@ -32,7 +32,7 @@ namespace Winsock
     Lasterror = WSAGetLastError();                                      \
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
-#define CALLWS_NORET(_Function, ...) {                              \
+    #define CALLWS_NORET(_Function, ...) {                              \
     auto Pointer = WSHooks1[__func__];                                  \
     if(!Pointer) Pointer = WSHooks2[__func__];                          \
     auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
@@ -42,9 +42,9 @@ namespace Winsock
     Lasterror = WSAGetLastError();                                      \
     Hook->Reinstall();                                                  \
     Hook->Function.first.unlock(); }
-#pragma endregion
+    #pragma endregion
 
-#pragma region Helpers
+    #pragma region Helpers
     std::unordered_map<size_t /* Socket */, bool> Blockingsockets;
 
     std::string Plainaddress(const struct sockaddr *Sockaddr)
@@ -72,9 +72,9 @@ namespace Winsock
 
         return Result;
     }
-#pragma endregion
+    #pragma endregion
 
-#pragma region Shims
+    #pragma region Shims
     int __stdcall Bind(size_t Socket, const struct sockaddr *Name, int Namelength)
     {
         int Result = 0;
@@ -648,9 +648,9 @@ namespace Winsock
         The async ones can be interesting.
         Remember to add new ones to the installer!
     */
-#pragma endregion
+    #pragma endregion
 
-#pragma region Installer
+    #pragma region Installer
     void WSInstaller()
     {
         // Helper-macro to save the developers fingers.
@@ -687,7 +687,7 @@ namespace Winsock
     // Add the installer on startup.
     struct Installer { Installer() { Localnetworking::Addplatform(WSInstaller); }; };
     static Installer Startup{};
-#pragma endregion
+    #pragma endregion
 }
 
 #undef INSTALL_HOOK
