@@ -173,7 +173,7 @@ namespace Wininet
             HTTPRequest += va("%s\r\n", Item.c_str());
         HTTPRequest += "\r\n";
 
-        // Send to winsock that forwards it to the server.
+        // Send to Winsock that forwards it to the server.
         send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), (int)HTTPRequest.size(), NULL);
 
         return TRUE;
@@ -199,7 +199,7 @@ namespace Wininet
             HTTPRequest += va("%s\r\n", Item.c_str());
         HTTPRequest += "\r\n";
 
-        // Send to winsock that forwards it to the server.
+        // Send to Winsock that forwards it to the server.
         send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), (int)HTTPRequest.size(), NULL);
 
         return TRUE;
@@ -224,7 +224,7 @@ namespace Wininet
         if (lpOptional && dwOptionalLength != NULL)
             HTTPRequest.append((char *)lpOptional, dwOptionalLength);
 
-        // Send to winsock that forwards it to the server.
+        // Send to Winsock that forwards it to the server.
         send(Activerequests[hRequest].Socket, HTTPRequest.data(), (int)HTTPRequest.size(), NULL);
 
         return TRUE;

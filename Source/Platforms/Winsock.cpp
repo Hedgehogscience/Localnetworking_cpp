@@ -665,7 +665,7 @@ namespace Winsock
         ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
         }                                                                                                                                   \
 
-        // Place the hooks directly in winsock.
+        // Place the hooks directly in Winsock.
         INSTALL_HOOK("bind", Bind);
         INSTALL_HOOK("connect", Connect);
         INSTALL_HOOK("ioctlsocket", IOControlsocket);
