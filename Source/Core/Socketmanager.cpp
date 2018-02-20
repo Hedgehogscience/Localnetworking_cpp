@@ -76,6 +76,12 @@ namespace Localnetworking
         Timestamp = time(NULL);
         Sockets.clear();
 
+        /*
+            BUG(Convery):
+            Race-condition:
+            Sockets.push_back(Item);
+        */
+
         // Get all connected sockets.
         for (auto &List : Connectedsockets)
             for(auto &Item : List.second)
