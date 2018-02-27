@@ -218,6 +218,8 @@ namespace Wininet
             HTTPRequest += va("%s\r\n", Item.c_str());
         if(lpszHeaders)
             HTTPRequest += va("%s", std::string(lpszHeaders, dwHeadersLength).c_str());
+        if(dwOptionalLength != NULL)
+            HTTPRequest += va("Content-Length: %u\r\n", dwOptionalLength);
         HTTPRequest += "\r\n";
 
         // Create the body.
