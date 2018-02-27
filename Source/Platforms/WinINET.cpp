@@ -29,6 +29,7 @@ namespace Wininet
         size_t Socket;
     };
     std::unordered_map<size_t, Internetrequest> Activerequests;
+    std::unordered_map<size_t, std::string> Responses;
     std::atomic<size_t> GlobalrequestID = 10;
 
     #pragma region Hooking
@@ -285,16 +286,63 @@ namespace Wininet
         *lpdwNumberOfBytesWritten = Result;
         return TRUE;
     }
-    BOOL __stdcall InternetReadfile(const size_t hFile, LPCVOID lpBuffer, DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead)
+    BOOL __stdcall InternetReadfile(const size_t hFile, LPVOID lpBuffer, DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead)
     {
         // Legacy functionality.
         *lpdwNumberOfBytesRead = 0;
 
-        auto Result = recv(Activerequests[hFile].Socket, (char *)lpBuffer, dwNumberOfBytesToRead, 0);
-        if (Result == -1) return FALSE;
+        // Fetch some data if needed.
+        if (Responses[Activerequests[hFile].Socket].size() == 0)
+        {
+            int Size = 2048;
+            char Buffer[2048]{};            
+            auto Result = recv(Activerequests[hFile].Socket, Buffer, Size, 0);
+            if (Result != -1)
+            {
+                Responses[Activerequests[hFile].Socket].append(Buffer, Result);
+            }
+        }
 
-        *lpdwNumberOfBytesRead = Result;
+        if (Responses[Activerequests[hFile].Socket].size() == 0)
+            return TRUE;
+
+        auto Length = std::min(Responses[Activerequests[hFile].Socket].size(), size_t(dwNumberOfBytesToRead));
+        std::memcpy(lpBuffer, Responses[Activerequests[hFile].Socket].data(), Length);
+        Responses[Activerequests[hFile].Socket].erase(Responses[Activerequests[hFile].Socket].begin(), Responses[Activerequests[hFile].Socket].begin() + Length);
+        *lpdwNumberOfBytesRead = Length;
         return TRUE;
+    }
+    
+    BOOL __stdcall HTTPQueryinfoA(const size_t hRequest, DWORD dwInfolevel, LPVOID lpvBuffer, LPDWORD lpdwBufferLength, LPDWORD lpdwIndex)
+    {
+        // Fetch some data if needed.
+        if (Responses[Activerequests[hRequest].Socket].size() == 0)
+        {
+            int Size = 2048;
+            char Buffer[2048]{};            
+            auto Result = recv(Activerequests[hRequest].Socket, Buffer, Size, 0);
+            if (Result != -1)
+            {
+                Responses[Activerequests[hRequest].Socket].append(Buffer, Result);
+            }
+        }
+
+        if (dwInfolevel & HTTP_QUERY_FLAG_NUMBER)
+        {
+            if (dwInfolevel & HTTP_QUERY_STATUS_CODE)
+            {
+                std::sscanf(Responses[Activerequests[hRequest].Socket].c_str(), "HTTP/1.1 %u", lpvBuffer);
+                return TRUE;
+            }
+
+            if (dwInfolevel & HTTP_QUERY_CONTENT_LENGTH)
+            {
+                *(DWORD *)lpvBuffer = Responses[Activerequests[hRequest].Socket].size();
+                return TRUE;
+            }
+        }
+
+        return FALSE;
     }
     #pragma endregion
 
@@ -333,6 +381,7 @@ namespace Wininet
         INSTALL_HOOK("HttpSendRequestW", HTTPSendrequestW);
         INSTALL_HOOK("InternetWriteFile", InternetWritefile);
         INSTALL_HOOK("InternetReadFile", InternetReadfile);
+        INSTALL_HOOK("HttpQueryInfoA", HTTPQueryinfoA);
     };
 
     // Add the installer on startup.
