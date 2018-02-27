@@ -56,6 +56,7 @@ namespace Localnetworking
     uint16_t HTTPGetstatuscode(size_t Handle);
     size_t HTTPGetresponsedatasize(size_t Handle);
     std::string HTTPGetresponsedata(size_t Handle);
+    void HTTPSetport(size_t Handle, uint16_t Port);
     void HTTPSenddata(size_t Handle, std::string Data);
     void HTTPSetmethod(size_t Handle, std::string Method);
     void HTTPSetuseragent(size_t Handle, std::string Agent);

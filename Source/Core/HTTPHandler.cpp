@@ -24,14 +24,18 @@ struct HTTPRequest_t
     std::string Agent;
     std::string Body;
     size_t Socket;
-    uint16_t Code;
+    union
+    {
+        uint16_t Code;
+        uint16_t Port;
+    };
 };
 
 namespace Localnetworking
 {
     std::unordered_map<size_t /* RequestID */, HTTPRequest_t> Responses;
     std::unordered_map<size_t /* RequestID */, HTTPRequest_t> Requests;
-    std::atomic<size_t> RequestID = 0;
+    std::atomic<size_t> RequestID = 10;
 
     // Download the response in the background.
     void Downloadresponse(size_t Handle)
@@ -41,7 +45,7 @@ namespace Localnetworking
         int Size = 8196;
         char Buffer[8196]{};
         auto Result = recv(Responses[Handle].Socket, Buffer, Size, 0);
-        if (Result != 0)
+        if (Result != -1)
         {
             /*
                 TODO(Convery):
@@ -59,9 +63,19 @@ namespace Localnetworking
     // Handle HTTP operations and pass it to POSIX.
     size_t HTTPCreaterequest()
     {
+        static bool Initialized = false;
+        if (!Initialized)
+        {
+            WSADATA wsaData;
+            Initialized = true;
+            WSAStartup(MAKEWORD(2,2), &wsaData);
+        }
+
         auto ID = RequestID++;
-        Requests[ID].Socket = socket(AF_INET, SOCK_STREAM, 0);
-        return RequestID;
+        unsigned long Argument = 0;
+        Requests[ID].Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        ioctlsocket(Requests[ID].Socket, FIONBIO, &Argument);
+        return ID;
     }
     void HTTPSendrequest(size_t Handle)
     {
@@ -70,8 +84,9 @@ namespace Localnetworking
         // Connect to the server.
         sockaddr_in Serveraddress{};
         Serveraddress.sin_family = AF_INET;
-        Serveraddress.sin_port = htons(80);
-        inet_pton(AF_INET, Internal.Hostname.c_str(), &Serveraddress.sin_addr);
+        Serveraddress.sin_port = htons(Internal.Port);
+        auto Resolved = gethostbyname(Internal.Hostname.c_str());
+        Serveraddress.sin_addr.s_addr = *(ULONG *)Resolved->h_addr_list[0];
         connect(Internal.Socket, (struct sockaddr *)&Serveraddress, sizeof(Serveraddress));
 
         // Create the request as a string.
@@ -90,6 +105,7 @@ namespace Localnetworking
 
         // Start fetching data for the result.
         std::thread(Downloadresponse, Handle).detach();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     void HTTPDeleterequest(size_t Handle)
     {
@@ -107,6 +123,10 @@ namespace Localnetworking
     std::string HTTPGetresponsedata(size_t Handle)
     {
         return Responses[Handle].Body;
+    }
+    void HTTPSetport(size_t Handle, uint16_t Port)
+    {
+        Requests[Handle].Port = Port;
     }
     void HTTPSenddata(size_t Handle, std::string Data)
     {

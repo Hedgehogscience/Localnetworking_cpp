@@ -14,24 +14,6 @@
 
 namespace Wininet
 {
-    struct Internetrequest
-    {
-        std::vector<std::string> Headers;
-        std::string Useragent;
-        std::string Hostname;
-        std::string Username;
-        std::string Password;
-        std::string Location;
-        std::string Version;
-        std::string Method;
-        IServer *Instance;
-        uint16_t Port;
-        size_t Socket;
-    };
-    std::unordered_map<size_t, Internetrequest> Activerequests;
-    std::unordered_map<size_t, std::string> Responses;
-    std::atomic<size_t> GlobalrequestID = 10;
-
     #pragma region Hooking
     // Track all the hooks installed into INET and HTTP.
     std::unordered_map<std::string, void *> WSHooks1;
@@ -61,14 +43,9 @@ namespace Wininet
     #pragma region Shims
     size_t __stdcall InternetopenA(LPCSTR lpszAgent, DWORD dwAccessType, LPCSTR lpszProxy, LPCSTR lpszProxyBypass, DWORD dwFlags)
     {
-        Internetrequest Request;
-        Request.Useragent = lpszAgent;
-
-        // Return the RequestID as handle.
-        size_t RequestID = GlobalrequestID.load();
-        while (!GlobalrequestID.compare_exchange_strong(RequestID, RequestID + 1)) RequestID++;
-        Activerequests[RequestID] = Request;
-        return RequestID;
+        auto Handle = Localnetworking::HTTPCreaterequest();
+        Localnetworking::HTTPSetuseragent(Handle, lpszAgent);
+        return Handle;
     }
     size_t __stdcall InternetopenW(LPCWSTR lpszAgent, DWORD dwAccessType, LPCWSTR lpszProxy, LPCWSTR lpszProxyBypass, DWORD dwFlags)
     {
@@ -78,82 +55,75 @@ namespace Wininet
 
         return InternetopenA(Agent.c_str(), dwAccessType, Proxy.c_str(), Proxybypass.c_str(), dwFlags);
     }
-    size_t __stdcall InternetconnectA(const size_t hInternet, LPCSTR lpszServerName, uint16_t nServerPort, LPCSTR lpszUserName, LPCSTR lpszPassword, DWORD dwService, DWORD dwFlags, DWORD_PTR dwContext)
+    size_t __stdcall InternetconnectA(const size_t Handle, LPCSTR lpszServerName, uint16_t nServerPort, LPCSTR lpszUserName, LPCSTR lpszPassword, DWORD dwService, DWORD dwFlags, DWORD_PTR dwContext)
     {
-        // Resolve the host.
-        Activerequests[hInternet].Hostname = lpszServerName;
-        auto Hostname = gethostbyname(lpszServerName);
-        if (Hostname == NULL) return NULL;
-
-        // Resolve the port if not specified.
-        Activerequests[hInternet].Port = nServerPort;
+        // Set the hostname and port.
+        Localnetworking::HTTPSetport(Handle, nServerPort);
+        Localnetworking::HTTPSethostname(Handle, lpszServerName);
         if (INTERNET_INVALID_PORT_NUMBER == nServerPort)
         {
-            if (INTERNET_SERVICE_FTP == dwService) Activerequests[hInternet].Port = 21;
-            if (INTERNET_SERVICE_HTTP == dwService) Activerequests[hInternet].Port = 80;
-            if (INTERNET_SERVICE_GOPHER == dwService) Activerequests[hInternet].Port = 70;
+            if (INTERNET_SERVICE_FTP == dwService) Localnetworking::HTTPSetport(Handle, 21);
+            if (INTERNET_SERVICE_HTTP == dwService) Localnetworking::HTTPSetport(Handle, 80);
+            if (INTERNET_SERVICE_GOPHER == dwService) Localnetworking::HTTPSetport(Handle, 70);
         }
 
         // Add the authentication info if available.
-        Activerequests[hInternet].Username = lpszUserName ? lpszUserName : "anonymous";
-        Activerequests[hInternet].Password = lpszPassword ? lpszPassword : "";
+        if (lpszUserName)
+        {
+            Localnetworking::HTTPSetheader(Handle, "Authorization",
+                va("Basic %s", Base64::Encode(va("%s:%s", lpszUserName, lpszPassword)).c_str()));
+        }
 
-        // Convert to a sockaddr.
-        sockaddr_in Address;
-        Address.sin_family = AF_INET;
-        Address.sin_port = htons(Activerequests[hInternet].Port);
-        Address.sin_addr.s_addr = *(ULONG *)Hostname->h_addr_list[0];
-
-        // Connect to the server.
-        Activerequests[hInternet].Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (SOCKET_ERROR == connect(Activerequests[hInternet].Socket, (SOCKADDR *)&Address, Hostname->h_length))
-            return NULL;
-
-        return hInternet;
+        return Handle;
     }
-    size_t __stdcall InternetconnectW(const size_t hInternet, LPCWSTR lpszServerName, uint16_t nServerPort, LPCWSTR lpszUserName, LPCWSTR lpszPassword, DWORD dwService, DWORD dwFlags, DWORD_PTR dwContext)
+    size_t __stdcall InternetconnectW(const size_t Handle, LPCWSTR lpszServerName, uint16_t nServerPort, LPCWSTR lpszUserName, LPCWSTR lpszPassword, DWORD dwService, DWORD dwFlags, DWORD_PTR dwContext)
     {
         std::wstring Temporary = lpszServerName; std::string Hostname = { Temporary.begin(), Temporary.end() };
         Temporary = lpszUserName; std::string Username = { Temporary.begin(), Temporary.end() };
         Temporary = lpszPassword; std::string Password = { Temporary.begin(), Temporary.end() };
 
-        return InternetconnectA(hInternet, Hostname.c_str(), nServerPort, Username.c_str(), Password.c_str(), dwService, dwFlags, dwContext);
+        return InternetconnectA(Handle, Hostname.c_str(), nServerPort, Username.c_str(), Password.c_str(), dwService, dwFlags, dwContext);
     }
     DWORD __stdcall InternetAttemptconnect(DWORD Reserved)
     {
         return ERROR_SUCCESS;
     }
-    size_t __stdcall HTTPOpenrequestA(const size_t hConnect, LPCSTR lpszVerb, LPCSTR lpszObjectName, LPCSTR lpszVersion, LPCSTR lpszReferrer, LPCSTR *lplpszAcceptTypes, DWORD dwFlags, DWORD_PTR dwContext)
+    size_t __stdcall HTTPOpenrequestA(const size_t Handle, LPCSTR lpszVerb, LPCSTR lpszObjectName, LPCSTR lpszVersion, LPCSTR lpszReferrer, LPCSTR *lplpszAcceptTypes, DWORD dwFlags, DWORD_PTR dwContext)
     {
         // Build the request.
-        Activerequests[hConnect].Method = lpszVerb ? lpszVerb : "GET";
-        Activerequests[hConnect].Location = lpszObjectName ? lpszObjectName : "";
-        Activerequests[hConnect].Version = lpszVersion ? lpszVersion : "HTTP/1.1";
+        Localnetworking::HTTPSetmethod(Handle, lpszVerb ? lpszVerb : "GET");
+        Localnetworking::HTTPSetresource(Handle, lpszObjectName ? lpszObjectName : "/");
 
-        return hConnect;
+        return Handle;
     }
-    size_t __stdcall HTTPOpenrequestW(const size_t hConnect, LPCWSTR lpszVerb, LPCWSTR lpszObjectName, LPCWSTR lpszVersion, LPCWSTR lpszReferrer, LPCWSTR *lplpszAcceptTypes, DWORD dwFlags, DWORD_PTR dwContext)
+    size_t __stdcall HTTPOpenrequestW(const size_t Handle, LPCWSTR lpszVerb, LPCWSTR lpszObjectName, LPCWSTR lpszVersion, LPCWSTR lpszReferrer, LPCWSTR *lplpszAcceptTypes, DWORD dwFlags, DWORD_PTR dwContext)
     {
         std::wstring Temporary = lpszVerb; std::string Method = { Temporary.begin(), Temporary.end() };
         Temporary = lpszObjectName; std::string Location = { Temporary.begin(), Temporary.end() };
         Temporary = lpszVersion; std::string Version = { Temporary.begin(), Temporary.end() };
         Temporary = lpszReferrer; std::string Referrer = { Temporary.begin(), Temporary.end() };
 
-        return HTTPOpenrequestA(hConnect, Method.c_str(), Location.c_str(), Version.c_str(), Referrer.c_str(), { NULL }, dwFlags, dwContext);
+        return HTTPOpenrequestA(Handle, Method.c_str(), Location.c_str(), Version.c_str(), Referrer.c_str(), { NULL }, dwFlags, dwContext);
     }
-    BOOL __stdcall HTTPAddrequestheadersA(const size_t hRequest, LPCSTR lpszHeaders, DWORD dwHeadersLength, DWORD dwModifiers)
+    BOOL __stdcall HTTPAddrequestheadersA(const size_t Handle, LPCSTR lpszHeaders, DWORD dwHeadersLength, DWORD dwModifiers)
     {
-        Activerequests[hRequest].Headers.push_back(lpszHeaders);
+        std::string Input(lpszHeaders);
+        Input.pop_back();
+        Input.pop_back();
+        Input.pop_back();
+        Input.pop_back();
+
+        Localnetworking::HTTPSetheader(Handle,
+            Input.substr(0, Input.find_first_of(':')),
+            Input.substr(Input.find_first_of(':') + 1));
         return TRUE;
     }
-    BOOL __stdcall HTTPAddrequestheadersW(const size_t hRequest, LPCWSTR lpszHeaders, DWORD dwHeadersLength, DWORD dwModifiers)
+    BOOL __stdcall HTTPAddrequestheadersW(const size_t Handle, LPCWSTR lpszHeaders, DWORD dwHeadersLength, DWORD dwModifiers)
     {
         std::wstring Temporary = lpszHeaders;
-
-        Activerequests[hRequest].Headers.push_back({ Temporary.begin(), Temporary.end() });
-        return TRUE;
+        return HTTPAddrequestheadersA(Handle, std::string(Temporary.begin(), Temporary.end()).c_str(), dwHeadersLength, dwModifiers);
     }
-    BOOL __stdcall HTTPSendrequestExA(const size_t hRequest, LPINTERNET_BUFFERSA lpBuffersIn, LPINTERNET_BUFFERSA lpBuffersOut, DWORD dwFlags, DWORD_PTR dwContext)
+    BOOL __stdcall HTTPSendrequestExA(const size_t Handle, LPINTERNET_BUFFERSA lpBuffersIn, LPINTERNET_BUFFERSA lpBuffersOut, DWORD dwFlags, DWORD_PTR dwContext)
     {
         /*
             NOTE(Convery):
@@ -162,24 +132,13 @@ namespace Wininet
             observed in a number of modern AAA games.
         */
 
-        // Create the request.
-        std::string HTTPRequest;
-        HTTPRequest += va("%s %s %s\r\n",
-            Activerequests[hRequest].Method.c_str(),
-            Activerequests[hRequest].Location.c_str(),
-            Activerequests[hRequest].Version.c_str());
-        HTTPRequest += va("User-Agent: %s\r\n",
-            Activerequests[hRequest].Useragent.c_str());
-        for (auto &Item : Activerequests[hRequest].Headers)
-            HTTPRequest += va("%s\r\n", Item.c_str());
-        HTTPRequest += "\r\n";
+        // I'd rather not deal with this right now..
+        assert(false);
 
-        // Send to Winsock that forwards it to the server.
-        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), (int)HTTPRequest.size(), NULL);
-
+        Localnetworking::HTTPSendrequest(Handle);
         return TRUE;
     }
-    BOOL __stdcall HTTPSendrequestExW(const size_t hRequest, LPINTERNET_BUFFERSW lpBuffersIn, LPINTERNET_BUFFERSW lpBuffersOut, DWORD dwFlags, DWORD_PTR dwContext)
+    BOOL __stdcall HTTPSendrequestExW(const size_t Handle, LPINTERNET_BUFFERSW lpBuffersIn, LPINTERNET_BUFFERSW lpBuffersOut, DWORD dwFlags, DWORD_PTR dwContext)
     {
         /*
             NOTE(Convery):
@@ -188,61 +147,31 @@ namespace Wininet
             observed in a number of modern AAA games.
         */
 
-        // Create the request.
-        std::string HTTPRequest;
-        HTTPRequest += va("%s %s %s\r\n",
-            Activerequests[hRequest].Method.c_str(),
-            Activerequests[hRequest].Location.c_str(),
-            Activerequests[hRequest].Version.c_str());
-        HTTPRequest += va("User-Agent: %s\r\n",
-            Activerequests[hRequest].Useragent.c_str());
-        for (auto &Item : Activerequests[hRequest].Headers)
-            HTTPRequest += va("%s\r\n", Item.c_str());
-        HTTPRequest += "\r\n";
+        // I'd rather not deal with this right now..
+        assert(false);
 
-        // Send to Winsock that forwards it to the server.
-        send(Activerequests[hRequest].Socket, HTTPRequest.c_str(), (int)HTTPRequest.size(), NULL);
-
+        Localnetworking::HTTPSendrequest(Handle);
         return TRUE;
     }
-    BOOL __stdcall HTTPSendrequestA(const size_t hRequest, LPCSTR lpszHeaders, DWORD dwHeadersLength, LPVOID lpOptional, DWORD dwOptionalLength)
+    BOOL __stdcall HTTPSendrequestA(const size_t Handle, LPCSTR lpszHeaders, DWORD dwHeadersLength, LPVOID lpOptional, DWORD dwOptionalLength)
     {
-        // Create the request.
-        std::string HTTPRequest;
-        HTTPRequest += va("%s %s %s\r\n",
-            Activerequests[hRequest].Method.c_str(),
-            Activerequests[hRequest].Location.c_str(),
-            Activerequests[hRequest].Version.c_str());
-        HTTPRequest += va("User-Agent: %s\r\n",
-            Activerequests[hRequest].Useragent.c_str());
-        for (auto &Item : Activerequests[hRequest].Headers)
-            HTTPRequest += va("%s\r\n", Item.c_str());
-        if(lpszHeaders)
-            HTTPRequest += va("%s", std::string(lpszHeaders, dwHeadersLength).c_str());
-        if(dwOptionalLength != NULL)
-            HTTPRequest += va("Content-Length: %u\r\n", dwOptionalLength);
-        HTTPRequest += "\r\n";
-
-        // Create the body.
-        if (lpOptional && dwOptionalLength != NULL)
-            HTTPRequest.append((char *)lpOptional, dwOptionalLength);
-
-        // Send to Winsock that forwards it to the server.
-        send(Activerequests[hRequest].Socket, HTTPRequest.data(), (int)HTTPRequest.size(), NULL);
-
+        // Add the missing header and data.
+        if (lpszHeaders) HTTPAddrequestheadersA(Handle, lpszHeaders, dwHeadersLength, 0);
+        if (dwOptionalLength != NULL) Localnetworking::HTTPSenddata(Handle, { (char *)lpOptional, dwOptionalLength });
+        Localnetworking::HTTPSendrequest(Handle);
         return TRUE;
     }
-    BOOL __stdcall HTTPSendrequestW(const size_t hRequest, LPCWSTR lpszHeaders, DWORD dwHeadersLength, LPVOID lpOptional, DWORD dwOptionalLength)
+    BOOL __stdcall HTTPSendrequestW(const size_t Handle, LPCWSTR lpszHeaders, DWORD dwHeadersLength, LPVOID lpOptional, DWORD dwOptionalLength)
     {
-        if (!lpszHeaders) return HTTPSendrequestA(hRequest, nullptr, 0, lpOptional, dwOptionalLength);
+        if (!lpszHeaders) return HTTPSendrequestA(Handle, nullptr, 0, lpOptional, dwOptionalLength);
 
         std::wstring Temporary = lpszHeaders;
         std::string Headers = { Temporary.begin(), Temporary.end() };
 
-        return HTTPSendrequestA(hRequest, Headers.c_str(), (int)Headers.size(), lpOptional, dwOptionalLength);
+        return HTTPSendrequestA(Handle, Headers.c_str(), (int)Headers.size(), lpOptional, dwOptionalLength);
     }
 
-    BOOL __stdcall InternetQueryoptionA(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, LPDWORD lpdwBufferLength)
+    BOOL __stdcall InternetQueryoptionA(const size_t Handle, DWORD dwOption, LPVOID lpBuffer, LPDWORD lpdwBufferLength)
     {
         /*
             TODO(Convery):
@@ -250,7 +179,7 @@ namespace Wininet
         */
         return TRUE;
     }
-    BOOL __stdcall InternetQueryoptionW(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, LPDWORD lpdwBufferLength)
+    BOOL __stdcall InternetQueryoptionW(const size_t Handle, DWORD dwOption, LPVOID lpBuffer, LPDWORD lpdwBufferLength)
     {
         /*
             TODO(Convery):
@@ -258,7 +187,7 @@ namespace Wininet
         */
         return TRUE;
     }
-    BOOL __stdcall InternetSetoptionA(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, DWORD dwBufferLength)
+    BOOL __stdcall InternetSetoptionA(const size_t Handle, DWORD dwOption, LPVOID lpBuffer, DWORD dwBufferLength)
     {
         /*
             TODO(Convery):
@@ -266,7 +195,7 @@ namespace Wininet
         */
         return TRUE;
     }
-    BOOL __stdcall InternetSetoptionW(const size_t hInternet, DWORD dwOption, LPVOID lpBuffer, DWORD dwBufferLength)
+    BOOL __stdcall InternetSetoptionW(const size_t Handle, DWORD dwOption, LPVOID lpBuffer, DWORD dwBufferLength)
     {
         /*
             TODO(Convery):
@@ -275,69 +204,42 @@ namespace Wininet
         return TRUE;
     }
 
-    BOOL __stdcall InternetWritefile(const size_t hFile, LPCVOID lpBuffer, DWORD dwNumberOfBytesToWrite, LPDWORD lpdwNumberOfBytesWritten)
+    BOOL __stdcall InternetWritefile(const size_t Handle, LPCVOID lpBuffer, DWORD dwNumberOfBytesToWrite, LPDWORD lpdwNumberOfBytesWritten)
     {
-        // Legacy functionality.
-        *lpdwNumberOfBytesWritten = 0;
-
-        auto Result = send(Activerequests[hFile].Socket, (char *)lpBuffer, dwNumberOfBytesToWrite, NULL);
-        if (-1 == Result) return FALSE;
-
-        *lpdwNumberOfBytesWritten = Result;
+        Localnetworking::HTTPSenddata(Handle, { (char *)lpBuffer, dwNumberOfBytesToWrite });
+        *lpdwNumberOfBytesWritten = dwNumberOfBytesToWrite;
+        Localnetworking::HTTPSendrequest(Handle);
         return TRUE;
     }
-    BOOL __stdcall InternetReadfile(const size_t hFile, LPVOID lpBuffer, DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead)
+    BOOL __stdcall InternetReadfile(const size_t Handle, LPVOID lpBuffer, DWORD dwNumberOfBytesToRead, LPDWORD lpdwNumberOfBytesRead)
     {
         // Legacy functionality.
         *lpdwNumberOfBytesRead = 0;
 
-        // Fetch some data if needed.
-        if (Responses[Activerequests[hFile].Socket].size() == 0)
+        auto Response = Localnetworking::HTTPGetresponsedata(Handle);
+        if (Response.size())
         {
-            int Size = 2048;
-            char Buffer[2048]{};            
-            auto Result = recv(Activerequests[hFile].Socket, Buffer, Size, 0);
-            if (Result != -1)
-            {
-                Responses[Activerequests[hFile].Socket].append(Buffer, Result);
-            }
+            auto Length = std::min(Response.size(), size_t(dwNumberOfBytesToRead));
+            std::memcpy(lpBuffer, Response.data(), Length);
+            *lpdwNumberOfBytesRead = Length;
         }
 
-        if (Responses[Activerequests[hFile].Socket].size() == 0)
-            return TRUE;
-
-        auto Length = std::min(Responses[Activerequests[hFile].Socket].size(), size_t(dwNumberOfBytesToRead));
-        std::memcpy(lpBuffer, Responses[Activerequests[hFile].Socket].data(), Length);
-        Responses[Activerequests[hFile].Socket].erase(Responses[Activerequests[hFile].Socket].begin(), Responses[Activerequests[hFile].Socket].begin() + Length);
-        *lpdwNumberOfBytesRead = Length;
         return TRUE;
     }
-    
-    BOOL __stdcall HTTPQueryinfoA(const size_t hRequest, DWORD dwInfolevel, LPVOID lpvBuffer, LPDWORD lpdwBufferLength, LPDWORD lpdwIndex)
-    {
-        // Fetch some data if needed.
-        if (Responses[Activerequests[hRequest].Socket].size() == 0)
-        {
-            int Size = 2048;
-            char Buffer[2048]{};            
-            auto Result = recv(Activerequests[hRequest].Socket, Buffer, Size, 0);
-            if (Result != -1)
-            {
-                Responses[Activerequests[hRequest].Socket].append(Buffer, Result);
-            }
-        }
 
+    BOOL __stdcall HTTPQueryinfoA(const size_t Handle, DWORD dwInfolevel, LPVOID lpvBuffer, LPDWORD lpdwBufferLength, LPDWORD lpdwIndex)
+    {
         if (dwInfolevel & HTTP_QUERY_FLAG_NUMBER)
         {
             if (dwInfolevel & HTTP_QUERY_STATUS_CODE)
             {
-                std::sscanf(Responses[Activerequests[hRequest].Socket].c_str(), "HTTP/1.1 %u", lpvBuffer);
+                *(uint16_t *)lpvBuffer = Localnetworking::HTTPGetstatuscode(Handle);
                 return TRUE;
             }
 
             if (dwInfolevel & HTTP_QUERY_CONTENT_LENGTH)
             {
-                *(DWORD *)lpvBuffer = Responses[Activerequests[hRequest].Socket].size();
+                *(DWORD *)lpvBuffer = Localnetworking::HTTPGetresponsedatasize(Handle);
                 return TRUE;
             }
         }

@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <string_view>
 #include <algorithm>
+#include <assert.h>
 #include <cstdint>
 #include <cstdarg>
 #include <cstring>
