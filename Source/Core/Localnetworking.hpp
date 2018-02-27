@@ -48,4 +48,18 @@ namespace Localnetworking
     // Initialize the platform hooks.
     void Addplatform(std::function<void()> Callback);
     void Initializeplatforms();
+
+    // Handle HTTP operations and pass it to POSIX.
+    size_t HTTPCreaterequest();
+    void HTTPSendrequest(size_t Handle);
+    void HTTPDeleterequest(size_t Handle);
+    uint16_t HTTPGetstatuscode(size_t Handle);
+    size_t HTTPGetresponsedatasize(size_t Handle);
+    std::string HTTPGetresponsedata(size_t Handle);
+    void HTTPSenddata(size_t Handle, std::string Data);
+    void HTTPSetmethod(size_t Handle, std::string Method);
+    void HTTPSetuseragent(size_t Handle, std::string Agent);
+    void HTTPSetresource(size_t Handle, std::string Resource);
+    void HTTPSethostname(size_t Handle, std::string Hostname);
+    void HTTPSetheader(size_t Handle, std::string Key, std::string Value);
 }
