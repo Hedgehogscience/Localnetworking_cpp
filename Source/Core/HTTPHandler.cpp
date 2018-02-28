@@ -105,7 +105,6 @@ namespace Localnetworking
 
         // Start fetching data for the result.
         std::thread(Downloadresponse, Handle).detach();
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     void HTTPDeleterequest(size_t Handle)
     {
