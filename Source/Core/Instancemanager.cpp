@@ -80,7 +80,7 @@ namespace Localnetworking
     // Reverse lookup and debugging information.
     void Forceresolvehost(std::string IP, std::string Hostname)
     {
-        Resolvercache[IP] = Hostname;
+        Resolvercache.emplace(IP, Hostname);
     }
     std::string Findhostname(IServer *Server)
     {
