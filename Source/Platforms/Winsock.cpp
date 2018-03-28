@@ -15,33 +15,27 @@ namespace Winsock
 {
     #pragma region Hooking
     // Track all the hooks installed into WS2_32 and wsock32 by name.
-    std::unordered_map<std::string, void *> WSHooks1;
-    std::unordered_map<std::string, void *> WSHooks2;
+    std::unordered_map<std::string, std::mutex> Guards;
+    std::unordered_map<std::string, void *> Hooks;
 
     // Save the state of WSAErrors.
     uint32_t Lasterror;
 
     // Macros to make calling WS a little easier.
-    #define CALLWS(_Function, _Result, ...) {                           \
-    auto Pointer = WSHooks1[__func__];                                  \
-    if(!Pointer) Pointer = WSHooks2[__func__];                          \
-    auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
-    Hook->Function.first.lock();                                        \
-    Hook->Removehook();                                                 \
-    *_Result = Hook->Function.second(__VA_ARGS__);                      \
-    Lasterror = WSAGetLastError();                                      \
-    Hook->Reinstall();                                                  \
-    Hook->Function.first.unlock(); }
-    #define CALLWS_NORET(_Function, ...) {                              \
-    auto Pointer = WSHooks1[__func__];                                  \
-    if(!Pointer) Pointer = WSHooks2[__func__];                          \
-    auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
-    Hook->Function.first.lock();                                        \
-    Hook->Removehook();                                                 \
-    Hook->Function.second(__VA_ARGS__);                                 \
-    Lasterror = WSAGetLastError();                                      \
-    Hook->Reinstall();                                                  \
-    Hook->Function.first.unlock(); }
+    #define Gethook(_Function) (Hooking::Stomphook<decltype(_Function)> *)Hooks[__func__];
+    #define Getguard() Guards[__func__]
+    #define CALLWS(_Function, _Result, ...) {           \
+    auto Pointer = Gethook(_Function);                  \
+    Getguard().lock();                                  \
+    Callhook_ret((*Pointer), _Result, __VA_ARGS__);     \
+    Lasterror = WSAGetLastError();                      \
+    Getguard().unlock(); }
+    #define CALLWS_NORET(_Function, ...) {              \
+    auto Pointer = Gethook(_Function);                  \
+    Getguard().lock();                                  \
+    Callhook_noret((*Pointer), __VA_ARGS__);            \
+    Lasterror = WSAGetLastError();                      \
+    Getguard().unlock(); }
     #pragma endregion
 
     #pragma region Helpers
@@ -82,7 +76,7 @@ namespace Winsock
         // Create a server if needed.
         auto Server = Localnetworking::Findserver(Plainaddress(Name));
         if (!Server) Server = Localnetworking::Createserver(Plainaddress(Name));
-        if (!Server) CALLWS(bind, &Result, Socket, Name, Namelength);
+        if (!Server) CALLWS(bind, Result, Socket, Name, Namelength);
         if (Server) Localnetworking::Createsocket(Server, Socket);
         Localnetworking::Addfilter(Socket, Localaddress(Name));
 
@@ -108,7 +102,7 @@ namespace Winsock
         if (Server) Server->onConnect(Socket, WSPort(Name));
 
         // Ask Windows to connect the socket if there's no server.
-        if (!Server) CALLWS(connect, &Result, Socket, Name, Namelength);
+        if (!Server) CALLWS(connect, Result, Socket, Name, Namelength);
 
         // Debug information.
         Debugprint(va("%s to %s:%u", Server || 0 == Result ? "Connected" : "Failed to connect", Plainaddress(Name).c_str(), WSPort(Name)));
@@ -142,7 +136,7 @@ namespace Winsock
         Debugprint(va("Socket 0x%X modified %s", Socket, Readable));
 
         // Call the IOControl on the actual socket.
-        CALLWS(ioctlsocket, &Result, Socket, Command, Argument);
+        CALLWS(ioctlsocket, Result, Socket, Command, Argument);
         if (Result == -1) WSASetLastError(Lasterror);
         return Result;
     }
@@ -190,7 +184,7 @@ namespace Winsock
         }
 
         // Ask Windows to fetch some data from the socket if it's not ours.
-        if (!Server) CALLWS(recv, &Result, Socket, Buffer, Length, Flags);
+        if (!Server) CALLWS(recv, Result, Socket, Buffer, Length, Flags);
         if (!Server) if (Result == -1) WSASetLastError(Lasterror);
 
         // Return the length or error.
@@ -266,7 +260,7 @@ namespace Winsock
         }
 
         // Ask Windows to fetch some data from the socket if it's not managed by us.
-        CALLWS(recvfrom, &Result, Socket, Buffer, Length, Flags, From, Fromlength);
+        CALLWS(recvfrom, Result, Socket, Buffer, Length, Flags, From, Fromlength);
         if (Result == uint32_t(-1)) WSASetLastError(Lasterror);
         if (Result == uint32_t(-1)) return -1;
         return std::min(Result, uint32_t(INT32_MAX));
@@ -312,7 +306,7 @@ namespace Winsock
             Timeout->tv_usec = 0;
         }
 
-        CALLWS(select, &Result, fdsCount, Readfds, Writefds, Exceptfds, Timeout);
+        CALLWS(select, Result, fdsCount, Readfds, Writefds, Exceptfds, Timeout);
         if (Result < 0) Result = 0;
 
         for (size_t i = 0; i < Readsockets.size(); i++)
@@ -376,7 +370,7 @@ namespace Winsock
         }
 
         // Ask Windows to send the data from the socket if it's not ours.
-        if (!Server) CALLWS(send, &Result, Socket, Buffer, Length, Flags);
+        if (!Server) CALLWS(send, Result, Socket, Buffer, Length, Flags);
         if (!Server) if (Result == -1) WSASetLastError(Lasterror);
 
         // Return the length or error.
@@ -433,7 +427,7 @@ namespace Winsock
         }
 
         // Ask Windows to send the data from the socket if it's not ours.
-        if (!Server) CALLWS(sendto, &Result, Socket, Buffer, Length, Flags, To, Tolength);
+        if (!Server) CALLWS(sendto, Result, Socket, Buffer, Length, Flags, To, Tolength);
         if (!Server) if (Result == -1) WSASetLastError(Lasterror);
 
         // Return the length or error.
@@ -446,10 +440,10 @@ namespace Winsock
     {
         // Create a server from the hostname, or ask Windows for it.
         auto Server = Localnetworking::Createserver(Hostname);
-        if (!Server) 
+        if (!Server)
         {
             static hostent *Resolvedhost;
-            CALLWS(gethostbyname, &Resolvedhost, Hostname);
+            CALLWS(gethostbyname, Resolvedhost, Hostname);
 
             Debugprint(va("%s: \"%s\" -> %s", __func__, Hostname, Resolvedhost ? inet_ntoa(*(in_addr*)Resolvedhost->h_addr_list[0]) : "Could not resolve"));
             if (!Resolvedhost) WSASetLastError(Lasterror);
@@ -493,13 +487,13 @@ namespace Winsock
 
         // Resolve the hostname through Winsock to allocate the result struct.
         if (Hints) Hints->ai_family = PF_INET;
-        CALLWS(getaddrinfo, &WSResult, Nodename, Servicename, Hints, Result);
+        CALLWS(getaddrinfo, WSResult, Nodename, Servicename, Hints, Result);
 
         // Modify the allocated structure to match our server.
         if (Server)
         {
             // Resolve a known host if the previous call failed.
-            if (0 != WSResult) CALLWS(getaddrinfo, &WSResult, "localhost", Servicename, Hints, Result);
+            if (0 != WSResult) CALLWS(getaddrinfo, WSResult, "localhost", Servicename, Hints, Result);
             if (0 != WSResult) return WSResult;
 
             // Create a fake IP address from the hostname.
@@ -535,13 +529,13 @@ namespace Winsock
 
         // Resolve the hostname through Winsock to allocate the result struct.
         if (Hints) Hints->ai_family = PF_INET;
-        CALLWS(GetAddrInfoW, &WSResult, Nodename, Servicename, Hints, Result);
+        CALLWS(GetAddrInfoW, WSResult, Nodename, Servicename, Hints, Result);
 
         // Modify the allocated structure to match our server.
         if (Server)
         {
             // Resolve a known host if the previous call failed.
-            if (0 != WSResult) CALLWS(GetAddrInfoW, &WSResult, L"localhost", Servicename, Hints, Result);
+            if (0 != WSResult) CALLWS(GetAddrInfoW, WSResult, L"localhost", Servicename, Hints, Result);
             if (0 != WSResult) return WSResult;
 
             // Create a fake IP address from the hostname.
@@ -571,7 +565,7 @@ namespace Winsock
 
         // Find a server associated with this socket.
         auto Server = Localnetworking::Findserver(Socket);
-        if (!Server) CALLWS(getpeername, &Result, Socket, Name, Namelength);
+        if (!Server) CALLWS(getpeername, Result, Socket, Name, Namelength);
         if (Server)
         {
             // Create a fake address.
@@ -596,7 +590,7 @@ namespace Winsock
 
         // Find a server associated with this socket.
         auto Server = Localnetworking::Findserver(Socket);
-        if (!Server) CALLWS(getsockname, &Result, Socket, Name, Namelength);
+        if (!Server) CALLWS(getsockname, Result, Socket, Name, Namelength);
         if (Server)
         {
             // Create a fake address.
@@ -654,16 +648,18 @@ namespace Winsock
     void WSInstaller()
     {
         // Helper-macro to save the developers fingers.
-        #define INSTALL_HOOK(_Function, _Replacement) {                                                                                     \
-        auto Address = (void *)GetProcAddress(GetModuleHandleA("wsock32.dll"), _Function);                                                  \
-        if(Address) {                                                                                                                       \
-        Winsock::WSHooks1[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
-        ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks1[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
-        Address = (void *)GetProcAddress(GetModuleHandleA("WS2_32.dll"), _Function);                                                        \
-        if(Address) {                                                                                                                       \
-        Winsock::WSHooks2[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
-        ((Hooking::StomphookEx<decltype(_Replacement)> *)Winsock::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
-        }                                                                                                                                   \
+        #define Getaddress(_Function) \
+        GetProcAddress(GetModuleHandleA("wsock32.dll"), _Function) ? \
+        GetProcAddress(GetModuleHandleA("wsock32.dll"), _Function) : \
+        GetProcAddress(GetModuleHandleA("WS2_32.dll"), _Function);
+
+        #define Createhook(_Address, _Replacement)                                                      \
+        auto Hook = Hooking::Stomphook<decltype(_Replacement)>::Install(_Address, &_Replacement);       \
+        Winsock::Hooks[#_Replacement] = new Hooking::Stomphook<decltype(_Replacement)>(std::move(Hook));
+
+        #define INSTALL_HOOK(_Function, _Replacement) {     \
+        auto Address = Getaddress(_Function);               \
+        if(Address) { Createhook(Address, _Replacement); } }
 
         // Place the hooks directly in Winsock.
         INSTALL_HOOK("bind", Bind);

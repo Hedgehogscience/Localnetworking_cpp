@@ -16,28 +16,24 @@ namespace Wininet
 {
     #pragma region Hooking
     // Track all the hooks installed into INET and HTTP.
-    std::unordered_map<std::string, void *> WSHooks1;
-    std::unordered_map<std::string, void *> WSHooks2;
+    std::unordered_map<std::string, std::mutex> Guards;
+    std::unordered_map<std::string, void *> Hooks;
 
     // Macros to make calling WS a little easier.
-    #define CALLWS(_Function, _Result, ...) {                           \
-    auto Pointer = WSHooks1[__func__];                                  \
-    if(!Pointer) Pointer = WSHooks2[__func__];                          \
-    auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
-    Hook->Function.first.lock();                                        \
-    Hook->Removehook();                                                 \
-    *_Result = Hook->Function.second(__VA_ARGS__);                      \
-    Hook->Reinstall();                                                  \
-    Hook->Function.first.unlock(); }
-    #define CALLWS_NORET(_Function, ...) {                              \
-    auto Pointer = WSHooks1[__func__];                                  \
-    if(!Pointer) Pointer = WSHooks2[__func__];                          \
-    auto Hook = (Hooking::StomphookEx<decltype(_Function)> *)Pointer;   \
-    Hook->Function.first.lock();                                        \
-    Hook->Removehook();                                                 \
-    Hook->Function.second(__VA_ARGS__);                                 \
-    Hook->Reinstall();                                                  \
-    Hook->Function.first.unlock(); }
+    #define Gethook(_Function) (Hooking::Stomphook<decltype(_Function)> *)Hooks[__func__];
+    #define Getguard() Guards[__func__]
+    #define CALLWS(_Function, _Result, ...) {           \
+    auto Pointer = Gethook(_Function);                  \
+    Getguard().lock();                                  \
+    Callhook_ret((*Pointer), _Result, __VA_ARGS__);     \
+    Lasterror = WSAGetLastError();                      \
+    Getguard().unlock(); }
+    #define CALLWS_NORET(_Function, ...) {              \
+    auto Pointer = Gethook(_Function);                  \
+    Getguard().lock();                                  \
+    Callhook_noret((*Pointer), __VA_ARGS__);            \
+    Lasterror = WSAGetLastError();                      \
+    Getguard().unlock(); }
     #pragma endregion
 
     #pragma region Shims
@@ -252,16 +248,18 @@ namespace Wininet
     void INETInstaller()
     {
         // Helper-macro to save the developers fingers.
-        #define INSTALL_HOOK(_Function, _Replacement) {                                                                                     \
-        auto Address = (void *)GetProcAddress(GetModuleHandleA("wininet.dll"), _Function);                                                  \
-        if(Address) {                                                                                                                       \
-        Wininet::WSHooks1[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
-        ((Hooking::StomphookEx<decltype(_Replacement)> *)Wininet::WSHooks1[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
-        Address = (void *)GetProcAddress(GetModuleHandleA("winhttp.dll"), _Function);                                                       \
-        if(Address) {                                                                                                                       \
-        Wininet::WSHooks2[#_Replacement] = new Hooking::StomphookEx<decltype(_Replacement)>();                                              \
-        ((Hooking::StomphookEx<decltype(_Replacement)> *)Wininet::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
-        }                                                                                                                                   \
+        #define Getaddress(_Function) \
+        GetProcAddress(GetModuleHandleA("wininet.dll"), _Function) ? \
+        GetProcAddress(GetModuleHandleA("wininet.dll"), _Function) : \
+        GetProcAddress(GetModuleHandleA("winhttp.dll"), _Function);
+
+        #define Createhook(_Address, _Replacement)                                                      \
+        auto Hook = Hooking::Stomphook<decltype(_Replacement)>::Install(_Address, &_Replacement);       \
+        Wininet::Hooks[#_Replacement] = new Hooking::Stomphook<decltype(_Replacement)>(std::move(Hook));
+
+        #define INSTALL_HOOK(_Function, _Replacement) {     \
+        auto Address = Getaddress(_Function);               \
+        if(Address) { Createhook(Address, _Replacement); } }
 
         // Place the hooks directly in windows INET.
         INSTALL_HOOK("InternetOpenA", InternetopenA);
