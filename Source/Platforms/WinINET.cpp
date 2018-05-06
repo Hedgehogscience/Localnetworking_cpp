@@ -263,6 +263,7 @@ namespace Wininet
         ((Hooking::StomphookEx<decltype(_Replacement)> *)Wininet::WSHooks2[#_Replacement])->Installhook(Address, (void *)&_Replacement);}   \
         }                                                                                                                                   \
 
+        #if defined ENABLE_BROKEN_CODE_SERIOUSLY_DONT
         // Place the hooks directly in windows INET.
         INSTALL_HOOK("InternetOpenA", InternetopenA);
         INSTALL_HOOK("InternetOpenW", InternetopenW);
@@ -284,6 +285,7 @@ namespace Wininet
         INSTALL_HOOK("InternetWriteFile", InternetWritefile);
         INSTALL_HOOK("InternetReadFile", InternetReadfile);
         INSTALL_HOOK("HttpQueryInfoA", HTTPQueryinfoA);
+        #endif
     };
 
     // Add the installer on startup.
